@@ -2,7 +2,7 @@ const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat:
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
-const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.699223, centerLongitude: 8.530626, zoom: 12, defaultLayers: [], showOpenStreetMap: false };
+const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false };
 const INITIAL_LAYER_PATTERNS = [
   /^dtk0*25(?:\b|\s)/,
   /^waldbrand\s*poi(?:\b|\s)/,

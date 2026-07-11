@@ -26,7 +26,7 @@ Das Repository enthält keinen Zugangsschlüssel. Erst nach der Eingabe auf eine
 
 ## 3. Ersteinrichtung
 
-1. Beim ersten Start werden DTK0025, Waldbrand-POI, Hydranten und Rettungspunkte automatisch aktiviert.
+1. Beim ersten Start werden DTK0025, Waldbrand-POI, Hydranten und Rettungspunkte automatisch aktiviert. Die Karte startet bei `49,696849 / 8,531227` mit Zoomstufe `14`.
 2. Unter **Layer** prüfen, ob die vier Standard-Layer sichtbar sind, und die Auswahl bei Bedarf anpassen. Es kann immer nur eine Hintergrundkarte aktiv sein.
 3. Die Karte auf Einhausen beziehungsweise das gewünschte Einsatzgebiet einstellen.
 4. Unter **Startansicht bearbeiten** auf **Aktuelle Ansicht speichern** tippen.
