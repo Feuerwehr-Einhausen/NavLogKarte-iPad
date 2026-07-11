@@ -2,4 +2,8 @@
 .idea/
 .vscode/
 node_modules/
-
+.env
+.env.*
+*.key
+navlog-key.txt
+config/navlog-key.txt
