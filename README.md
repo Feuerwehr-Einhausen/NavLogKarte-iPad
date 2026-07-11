@@ -28,18 +28,18 @@ Da die Anwendung vollständig im Browser läuft, sind ihre ausgelieferten HTML-,
 
 ## Betrieb und Installation
 
-Für Installation, Service Worker und Standortfreigabe wird HTTPS benötigt. Dieses Repository enthält einen GitHub-Pages-Workflow. Es kann für Installation und Updates kurz öffentlich bereitgestellt und danach wieder privat geschaltet werden. Bereits installierte iPads starten die Oberfläche anschließend aus ihrem lokalen PWA-Cache.
+Für Installation, Service Worker und Standortfreigabe wird HTTPS benötigt. Dieses Repository enthält einen GitHub-Pages-Workflow, der Änderungen auf `main` automatisch veröffentlicht. Bereits installierte iPads übernehmen neue App-Dateien beim nächsten Online-Start.
 
 Die vollständige Anleitung steht in [INSTALLATION-IPAD.md](INSTALLATION-IPAD.md).
 
-Aktuelle Installationsadresse während eines geöffneten Installationsfensters:
+Installationsadresse:
 
 https://feuerwehr-einhausen.github.io/NavLogKarte-iPad/
 
 ## Einschränkungen
 
 - NavLog-WMS, Adresssuche und Kartenkacheln benötigen eine Internetverbindung.
-- Updates, Neuinstallationen und zusätzliche iPads benötigen eine erneut erreichbare HTTPS-Bereitstellung.
+- Updates, Neuinstallationen und zusätzliche iPads benötigen die erreichbare HTTPS-Bereitstellung.
 - iPadOS kann lokale Website- und App-Daten entfernen. Eine installierte PWA ersetzt daher keine zentral administrierte Offline-Kartenlösung.
 - Die Anwendung besitzt keinen eigenen WMS-Proxy; der verwendete WMS muss Browseranfragen per CORS erlauben.
 
