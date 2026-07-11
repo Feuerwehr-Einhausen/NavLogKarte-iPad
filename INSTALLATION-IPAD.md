@@ -4,18 +4,12 @@
 
 GitHub Pages liefert die PWA per HTTPS aus. Das ist für die Installation, den Service Worker und die GPS-Freigabe erforderlich. Der NavLog-Schlüssel wird dabei **nicht** auf GitHub gespeichert.
 
-### 1. Repository auf GitHub anlegen
+### 1. Bereitgestellte App öffnen
 
-1. Auf GitHub ein neues Repository `NavLogKarte-iPad` anlegen.
-2. Dieses lokale Projekt auf den Branch `main` pushen.
-3. Im GitHub-Repository **Settings → Pages** öffnen.
-4. Unter **Build and deployment → Source** den Eintrag **GitHub Actions** auswählen.
-5. Unter **Actions** warten, bis „iPad-PWA auf GitHub Pages bereitstellen“ grün abgeschlossen ist.
-
-Die Adresse sieht anschließend ungefähr so aus:
+Die iPad-App ist bereits unter folgender HTTPS-Adresse veröffentlicht:
 
 ```text
-https://BENUTZERNAME.github.io/NavLogKarte-iPad/
+https://feuerwehr-einhausen.github.io/NavLogKarte-iPad/
 ```
 
 Das Repository enthält keinen Zugangsschlüssel. Die Website kann daher öffentlich ausgeliefert werden, ohne den NavLog-Zugang zu veröffentlichen. Erst auf einem eingerichteten iPad ist die Kunden-ID lokal vorhanden.

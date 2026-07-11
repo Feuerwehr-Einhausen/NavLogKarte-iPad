@@ -2,6 +2,8 @@
 
 Eigenständige, installierbare Progressive Web App für die Feuerwehr Einhausen. Dieses Projekt ist vollständig vom Desktopprojekt `NavLogKarte` getrennt.
 
+**App öffnen:** https://feuerwehr-einhausen.github.io/NavLogKarte-iPad/
+
 ## Eigenschaften
 
 - Installation über Safari auf dem iPad-Home-Bildschirm
