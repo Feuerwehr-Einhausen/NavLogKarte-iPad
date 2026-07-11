@@ -48,9 +48,6 @@ function wireUi() {
     if (button) showQrDialog(Number(button.dataset.lat), Number(button.dataset.lon));
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePanel(); });
-  window.addEventListener('online', updateConnectionStatus);
-  window.addEventListener('offline', updateConnectionStatus);
-  updateConnectionStatus();
 }
 
 function initMap(crsCode) {
@@ -598,14 +595,6 @@ function resetAccess() {
   if (!window.confirm('NavLog-Zugang auf diesem iPad wirklich löschen und neu eingeben?')) return;
   localStorage.removeItem(STORAGE_KEYS.kid);
   window.location.reload();
-}
-
-function updateConnectionStatus(event) {
-  // Safari im iPad-Home-Bildschirm meldet navigator.onLine beim Start
-  // gelegentlich falsch. Nur ein echtes Offline-Ereignis blendet den
-  // Hinweis ein; beim Start und sobald Safari wieder online meldet, bleibt
-  // er verborgen.
-  $('connectionBanner').hidden = event?.type !== 'offline';
 }
 
 async function saveSettings(event) {
