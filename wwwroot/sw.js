@@ -1,10 +1,10 @@
-const CACHE_NAME = 'navlog-ipad-shell-v5';
+const CACHE_NAME = 'navlog-ipad-shell-v6';
 const APP_SHELL = [
   './',
-  './index.html',
+  './index.html?v=20260711-6',
   './offline.html',
-  './app.css',
-  './app.js',
+  './app.css?v=20260711-6',
+  './app.js?v=20260711-6',
   './manifest.webmanifest',
   './assets/feuerwehr-einhausen-logo.png',
   './assets/icons/apple-touch-icon.png',
@@ -34,7 +34,7 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('./index.html')).catch(() => caches.match('./offline.html')));
+    event.respondWith(fetch(event.request).catch(() => caches.match('./index.html?v=20260711-6')).catch(() => caches.match('./offline.html')));
     return;
   }
 
