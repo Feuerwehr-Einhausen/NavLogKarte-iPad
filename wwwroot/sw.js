@@ -1,4 +1,4 @@
-const CACHE_NAME = 'navlog-ipad-shell-v6';
+const CACHE_NAME = 'navlog-ipad-shell-v7';
 const APP_SHELL = [
   './',
   './index.html?v=20260711-6',
@@ -34,7 +34,10 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('./index.html?v=20260711-6')).catch(() => caches.match('./offline.html')));
+    event.respondWith(fetch(event.request).then(response => {
+      if (response.ok) return response;
+      return caches.match('./index.html?v=20260711-6').then(cached => cached || caches.match('./offline.html'));
+    }).catch(() => caches.match('./index.html?v=20260711-6')).catch(() => caches.match('./offline.html')));
     return;
   }
 
