@@ -13,6 +13,7 @@ async function start() {
     applyConfigToUi();
     if (!state.config.configured) {
       initMap('EPSG:3857');
+      setStatus('NavLog-Zugang einrichten');
       $('setupDialog').showModal();
     } else {
       await loadCapabilities();
