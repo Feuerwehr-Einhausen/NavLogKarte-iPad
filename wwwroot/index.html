@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#9f1d20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NavLog Karte">
+  <title>NavLog Karte – iPad</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main id="app" class="app-shell" aria-busy="true">
+    <div id="connectionBanner" class="connection-banner" hidden>Keine Internetverbindung – die Kartenansicht benötigt eine Verbindung.</div>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="assets/feuerwehr-einhausen-logo.png" alt="Logo Feuerwehr Einhausen">
+        <div><strong id="title">NavLog Waldbrandkarte</strong><span id="status">Wird gestartet …</span></div>
+      </div>
+      <div class="header-actions">
+        <button id="searchButton" class="icon-button" type="button" aria-controls="searchBox" aria-expanded="false">Suche</button>
+        <button id="layersButton" class="icon-button" type="button" aria-controls="panel" aria-expanded="false">Layer</button>
+      </div>
+    </header>
+
+    <section id="searchBox" class="search-box" hidden aria-label="Kartensuche">
+      <form id="searchForm" class="search-form">
+        <label for="searchInput" class="sr-only">Adresse, Ort oder Koordinate</label>
+        <input id="searchInput" type="search" maxlength="160" placeholder="Adresse, GPS oder 32U MA 66554 03081" autocomplete="off">
+        <button class="primary-button" type="submit">Suchen</button>
+      </form>
+      <div id="searchResults" class="search-results" aria-live="polite"></div>
+      <small>Adressdaten: © OpenStreetMap-Mitwirkende</small>
+    </section>
+
+    <section id="map" aria-label="Interaktive Einsatzkarte"></section>
+
+    <nav class="map-tools" aria-label="Kartenwerkzeuge">
+      <button id="locateButton" type="button" title="Eigenen Standort anzeigen">◎<span>Standort</span></button>
+      <button id="homeButton" type="button" title="Zum Startgebiet zurück">⌂<span>Start</span></button>
+      <button id="printButton" type="button" title="Karte mit Legende drucken">▣<span>Drucken</span></button>
+      <button id="fullscreenButton" type="button" title="Vollbild umschalten">⛶<span>Vollbild</span></button>
+    </nav>
+
+    <aside id="printLegend" class="print-legend" aria-label="Drucklegende">
+      <div class="print-legend-header">
+        <img src="assets/feuerwehr-einhausen-logo.png" alt="">
+        <div><strong id="printTitle">NavLog Waldbrandkarte</strong><span>Legende der aktiven Layer</span></div>
+      </div>
+      <div id="printLegendList" class="legend-list"></div>
+    </aside>
+
+    <aside id="panel" class="panel" aria-hidden="true" aria-label="Karteneinstellungen">
+      <div class="panel-header"><h2>Layer & Einstellungen</h2><button id="closePanel" class="close-button" type="button" aria-label="Schließen">×</button></div>
+      <div class="panel-content">
+        <div class="layer-actions" aria-label="Layer schnell schalten">
+          <button id="allLayersOff" type="button">Alles aus</button>
+          <button id="restoreStartView" class="start-view-button" type="button">Startansicht</button>
+        </div>
+        <div class="layer-symbol-key" aria-label="Bedeutung der Layersymbole">
+          <span><span class="layer-icon background" aria-hidden="true">▱</span>Hintergrund</span>
+          <span><span class="layer-icon points" aria-hidden="true">●</span>Punkte</span>
+          <span><span class="layer-icon routes" aria-hidden="true">⌁</span>Wege</span>
+        </div>
+        <label class="switch-row"><input id="osmToggle" type="checkbox" checked><span class="layer-icon background" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m3 5 5-2 8 3 5-2v15l-5 2-8-3-5 2V5Zm5-2v15m8-12v15"/></svg></span><span>OpenStreetMap Hintergrund</span></label>
+        <section><h3>NavLog-Layer</h3><div id="layerList" class="layer-list"><p class="muted">Layer werden geladen …</p></div></section>
+        <section><h3>Legende aktiver Layer</h3><div id="legendList" class="legend-list"><p class="muted">Noch kein Layer aktiviert.</p></div></section>
+        <details>
+          <summary>Startansicht bearbeiten</summary>
+          <form id="settingsForm" class="settings-form">
+            <label>Titel<input id="settingTitle" maxlength="80"></label>
+            <div class="field-pair"><label>Breitengrad<input id="settingLat" type="number" step="any" min="-90" max="90"></label><label>Längengrad<input id="settingLon" type="number" step="any" min="-180" max="180"></label></div>
+            <label>Zoom<input id="settingZoom" type="number" min="3" max="20"></label>
+            <button class="primary-button" type="submit">Aktuelle Ansicht speichern</button>
+            <button id="resetAccessButton" class="secondary-button" type="button">NavLog-Zugang ändern</button>
+          </form>
+        </details>
+      </div>
+    </aside>
+    <div id="backdrop" class="backdrop" hidden></div>
+  </main>
+
+  <dialog id="setupDialog">
+    <form id="setupForm" method="dialog">
+      <div class="dialog-badge">Ersteinrichtung</div>
+      <h1>NavLog verbinden</h1>
+      <p>Trage nur den Wert hinter <code>kid=</code> ein. Er wird ausschließlich lokal in Safari auf diesem iPad gespeichert.</p>
+      <label>NavLog-Kunden-ID<input id="kidInput" type="password" autocomplete="off" required maxlength="256"></label>
+      <button class="primary-button" type="submit">Verbindung einrichten</button>
+      <p id="setupError" class="error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <dialog id="qrDialog" class="qr-dialog">
+    <div class="qr-dialog-content">
+      <button id="closeQrDialog" class="close-button qr-close" type="button" aria-label="QR-Code schließen">×</button>
+      <div class="dialog-badge">Navigation</div>
+      <h2>Ziel mit Smartphone öffnen</h2>
+      <p>QR-Code mit der Kamera-App scannen und anschließend die Navigation starten.</p>
+      <div id="qrCode" class="qr-code" aria-label="QR-Code für die Navigation"></div>
+      <div id="qrCoordinates" class="qr-coordinates"></div>
+      <a id="qrNavigationLink" class="primary-button qr-link" href="#" target="_blank" rel="noopener">Navigation auf diesem Gerät öffnen</a>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/mgrs.js"></script>
+  <script src="vendor/qrcode.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
