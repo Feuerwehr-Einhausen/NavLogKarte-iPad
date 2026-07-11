@@ -1,4 +1,4 @@
-const CACHE_NAME = 'navlog-ipad-shell-v1';
+const CACHE_NAME = 'navlog-ipad-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',
