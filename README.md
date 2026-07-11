@@ -9,6 +9,7 @@ Die Oberfläche kann für eine Organisation mit eigenem Namen, Logo, Startgebiet
 - Installation über Safari auf dem iPad-Home-Bildschirm
 - direkte Darstellung der vom NavLog-WMS angebotenen Layer
 - getrennte Behandlung von Hintergrundkarten, Punkten und Wegen
+- vorkonfigurierte Erstansicht mit DTK0025, Waldbrand-POI, Hydranten und Rettungspunkten
 - GPS- sowie MGRS/UTMREF-Anzeige und -Suche
 - Adresssuche über OpenStreetMap/Nominatim
 - abrufbare Symbol- und Objektinformationen

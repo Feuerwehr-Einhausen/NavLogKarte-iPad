@@ -2,7 +2,13 @@ const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat:
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
-const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.699223, centerLongitude: 8.530626, zoom: 12, defaultLayers: [], showOpenStreetMap: true };
+const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.699223, centerLongitude: 8.530626, zoom: 12, defaultLayers: [], showOpenStreetMap: false };
+const INITIAL_LAYER_PATTERNS = [
+  /^dtk0*25(?:\b|\s)/,
+  /^waldbrand\s*poi(?:\b|\s)/,
+  /^hydrant(?:en)?(?:\b|\s)/,
+  /^rettungspunkte?(?:\b|\s)/
+];
 
 document.addEventListener('DOMContentLoaded', start);
 
@@ -87,6 +93,7 @@ async function loadCapabilities() {
     state.featureInfoFormat = extractFeatureInfoFormat(xml);
     initMap(mapCrs);
     state.availableLayers = extractLayers(xml);
+    if (state.config.useInitialLayerDefaults) state.config.defaultLayers = resolveInitialLayers(state.availableLayers);
     renderLayers();
     setStatus(`${state.availableLayers.length} NavLog-Layer verfügbar`);
   } catch (error) {
@@ -111,6 +118,19 @@ function extractLayers(xml) {
     }
     return { name: direct('Name'), title: direct('Title'), queryable };
   }).filter(layer => layer.name).filter((layer, index, all) => all.findIndex(other => other.name === layer.name) === index);
+}
+
+function resolveInitialLayers(layers) {
+  const selected = [];
+  for (const pattern of INITIAL_LAYER_PATTERNS) {
+    const match = layers.find(layer => [layer.name, layer.title].some(value => pattern.test(normalizeLayerLabel(value))));
+    if (match && !selected.includes(match.name)) selected.push(match.name);
+  }
+  return selected;
+}
+
+function normalizeLayerLabel(value) {
+  return String(value || '').toLowerCase().replace(/[_-]+/g, ' ').replace(/[^a-z0-9äöüß]+/g, ' ').trim();
 }
 
 function extractFeatureInfoFormat(xml) {
@@ -637,7 +657,14 @@ function loadLocalConfig() {
   try { settings = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || '{}'); }
   catch { settings = {}; }
   const kid = localStorage.getItem(STORAGE_KEYS.kid)?.trim();
-  return { ...DEFAULT_CONFIG, ...settings, configured: Boolean(kid), defaultLayers: Array.isArray(settings.defaultLayers) ? settings.defaultLayers : [] };
+  const hasSavedLayerSelection = Array.isArray(settings.defaultLayers);
+  return {
+    ...DEFAULT_CONFIG,
+    ...settings,
+    configured: Boolean(kid),
+    defaultLayers: hasSavedLayerSelection ? settings.defaultLayers : [],
+    useInitialLayerDefaults: !hasSavedLayerSelection
+  };
 }
 
 function navlogUrl(params = {}) {
