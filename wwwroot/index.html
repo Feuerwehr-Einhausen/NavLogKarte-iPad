@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260711-6">
+  <link rel="stylesheet" href="app.css?v=20260719-10">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -80,6 +80,11 @@
             <button id="resetAccessButton" class="secondary-button" type="button">NavLog-Zugang ändern</button>
           </form>
         </details>
+        <footer class="panel-footer">
+          <span>NavLog Waldbrandkarte <span id="appVersion"></span></span>
+          <span>© 2026 Feuerwehr Einhausen</span>
+          <span class="disclaimer">Kein offizielles NavLog-Produkt – internes Projekt der Feuerwehr Einhausen auf Basis der NavLog-Karten.</span>
+        </footer>
       </div>
     </aside>
     <div id="backdrop" class="backdrop" hidden></div>
@@ -89,6 +94,7 @@
     <form id="setupForm" method="dialog">
       <div class="dialog-badge">Ersteinrichtung</div>
       <h1>NavLog verbinden</h1>
+      <p class="setup-note">Kein offizielles NavLog-Produkt – internes Projekt der Feuerwehr Einhausen auf Basis der NavLog-Karten.</p>
       <p>Trage nur den Wert hinter <code>kid=</code> ein. Er wird ausschließlich lokal in Safari auf diesem iPad gespeichert.</p>
       <label>NavLog-Kunden-ID<input id="kidInput" type="password" autocomplete="off" required maxlength="256"></label>
       <button class="primary-button" type="submit">Verbindung einrichten</button>
@@ -112,6 +118,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260711-9"></script>
+  <script src="app.js?v=20260719-10"></script>
 </body>
 </html>

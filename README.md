@@ -1,5 +1,7 @@
 # NavLog-Karte für iPad
 
+> **Hinweis:** Dies ist **kein offizielles NavLog-Produkt.** Es handelt sich um ein internes Projekt der Feuerwehr Einhausen, das auf den NavLog-Karten aufsetzt.
+
 Installierbare Progressive Web App zur mobilen Darstellung eines zugangsgeschützten NavLog-WMS. Die Anwendung richtet sich insbesondere an Einsatzorganisationen, die Karten, Objektinformationen und Koordinaten auf einem iPad verwenden möchten, ohne eine native App aus dem App Store zu verteilen.
 
 Die Oberfläche kann für eine Organisation mit eigenem Namen, Logo, Startgebiet und einer passenden Layerauswahl eingerichtet werden. Diese Auslieferung ist für die Feuerwehr Einhausen konfiguriert.

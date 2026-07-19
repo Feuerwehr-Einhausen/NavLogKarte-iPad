@@ -59,6 +59,9 @@ button { min-width:48px; min-height:48px; cursor:pointer; }
 .legend-item img { display:block; max-width:100%; height:auto; }
 .legend-item .error { margin:0; }
 .muted { color:#6c716d; }
+.panel-footer { margin-top:18px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:2px; color:#8a8f8a; font-size:11px; line-height:1.5; }
+.panel-footer .disclaimer { margin-top:6px; }
+.setup-note { margin:0; font-size:12px; line-height:1.5; color:#6c716d; }
 details { margin-top:20px; border-top:1px solid var(--line); padding-top:8px; }
 summary { min-height:48px; display:flex; align-items:center; font-weight:750; cursor:pointer; }
 .settings-form, dialog form { display:grid; gap:14px; }
