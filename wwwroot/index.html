@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://gdw.navlog.de https://*.tile.openstreetmap.org; connect-src 'self' https://gdw.navlog.de https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#9f1d20">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260719-10">
+  <link rel="stylesheet" href="app.css?v=20260724-11">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -118,6 +120,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260719-10"></script>
+  <script src="app.js?v=20260724-11"></script>
 </body>
 </html>
