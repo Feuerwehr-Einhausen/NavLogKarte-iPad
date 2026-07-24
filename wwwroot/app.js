@@ -1,10 +1,10 @@
-const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null };
+const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, weather: { marker: null } };
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.0.1';
-const APP_BUILD = '2026-07-24';
+const APP_VERSION = '1.2.2';
+const APP_BUILD = '2026-07-25';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false };
 const INITIAL_LAYER_PATTERNS = [
   /^dtk0*25(?:\b|\s)/,
@@ -51,11 +51,35 @@ function wireUi() {
   $('setupForm').addEventListener('submit', saveKid);
   $('settingsForm').addEventListener('submit', saveSettings);
   $('resetAccessButton').addEventListener('click', resetAccess);
+  $('measureButton').addEventListener('click', toggleMeasure);
+  $('measureClose').addEventListener('click', closeMeasure);
+  $('measureUndo').addEventListener('click', undoMeasurePoint);
+  $('measureFinish').addEventListener('click', () => finishMeasurement(true));
+  $('measureClear').addEventListener('click', clearMeasurements);
+  for (const button of document.querySelectorAll('.measure-mode')) button.addEventListener('click', () => setMeasureMode(button.dataset.mode));
+  for (const button of document.querySelectorAll('.radius-preset')) button.addEventListener('click', () => { $('radiusInput').value = button.dataset.radius; updateWorkingMeasure(); });
+  $('radiusInput').addEventListener('input', updateWorkingMeasure);
+  $('signsButton').addEventListener('click', toggleSigns);
+  $('signClose').addEventListener('click', closeSigns);
+  $('signClearAll').addEventListener('click', clearSigns);
+  $('signLabelInput').addEventListener('input', onSignOptionInput);
+  $('signRotationInput').addEventListener('input', onSignOptionInput);
+  $('weatherButton').addEventListener('click', toggleWeather);
+  $('closeWeather').addEventListener('click', closeWeather);
+  $('weatherRefresh').addEventListener('click', refreshWeather);
   $('closeQrDialog').addEventListener('click', () => $('qrDialog').close());
   $('qrDialog').addEventListener('click', event => { if (event.target === $('qrDialog')) $('qrDialog').close(); });
   document.addEventListener('click', event => {
     const button = event.target.closest('.coordinate-qr-button');
     if (button) showQrDialog(Number(button.dataset.lat), Number(button.dataset.lon));
+    const deleteButton = event.target.closest('.measure-delete-button');
+    if (deleteButton) deleteMeasurement(deleteButton.dataset.id);
+    const editButton = event.target.closest('.measure-edit-button');
+    if (editButton) editMeasurement(editButton.dataset.id);
+    const signDeleteButton = event.target.closest('.sign-delete-button');
+    if (signDeleteButton) deleteSign(signDeleteButton.dataset.id);
+    const signEditButton = event.target.closest('.sign-edit-button');
+    if (signEditButton) editSign(signEditButton.dataset.id);
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePanel(); });
 }
@@ -80,6 +104,9 @@ function initMap(crsCode) {
     $('osmToggle').closest('label').title = 'Der NavLog-Dienst unterstützt in dieser Konfiguration kein Web-Mercator.';
   }
   if (state.config.showOpenStreetMap && osmCompatible) state.osm.addTo(state.map);
+  L.control.scale({ imperial: false, maxWidth: 140 }).addTo(state.map);
+  initMeasure();
+  initSigns();
   state.map.on('click', queryMapPoint);
 }
 
@@ -147,6 +174,8 @@ function extractFeatureInfoFormat(xml) {
 }
 
 async function queryMapPoint(event) {
+  if (state.signs.active) { handleSignClick(event); return; }
+  if (state.measure.active) { handleMeasureClick(event); return; }
   const base = coordinatePopup(event.latlng.lat, event.latlng.lng);
   const queryableLayers = state.availableLayers.filter(layer => {
     const tile = state.navlogLayers.get(layer.name);
@@ -615,10 +644,21 @@ async function saveKid(event) {
   } catch (error) { $('setupError').textContent = error.message; }
 }
 
-function resetAccess() {
-  if (!window.confirm('NavLog-Zugang auf diesem iPad wirklich löschen und neu eingeben?')) return;
+async function resetAccess() {
+  if (!await confirmAction('NavLog-Zugang auf diesem iPad wirklich löschen und neu eingeben?', 'Zugang löschen')) return;
   localStorage.removeItem(STORAGE_KEYS.kid);
   window.location.reload();
+}
+
+function confirmAction(message, confirmLabel = 'Löschen') {
+  const dialog = $('confirmDialog');
+  $('confirmMessage').textContent = message;
+  $('confirmAcceptButton').textContent = confirmLabel;
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+    dialog.showModal();
+  });
 }
 
 async function saveSettings(event) {
@@ -677,6 +717,631 @@ function navlogUrl(params = {}) {
   if (kid) url.searchParams.set('kid', kid);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.toString();
+}
+
+// ── Messwerkzeuge (Strecke, Fläche, Absperrkreis) ──────────────────────────
+const MEASURE_STORAGE = 'navlog-ipad-measurements';
+const LINE_STYLE = { color: '#9f1d20', weight: 4, dashArray: '6 8', interactive: false };
+const AREA_STYLE = { color: '#9f1d20', weight: 3, fillColor: '#9f1d20', fillOpacity: 0.12, interactive: false };
+const CIRCLE_STYLE = { color: '#9f1d20', weight: 3, dashArray: '4 8', fillColor: '#9f1d20', fillOpacity: 0.09, interactive: false };
+
+function initMeasure() {
+  state.measure.group = L.layerGroup().addTo(state.map);
+  for (const item of loadMeasurements()) drawSavedMeasurement(item);
+}
+
+function loadMeasurements() {
+  try {
+    const items = JSON.parse(localStorage.getItem(MEASURE_STORAGE) || '[]');
+    if (!Array.isArray(items)) return [];
+    let migrated = false;
+    for (const item of items) if (!item.id) { item.id = crypto.randomUUID(); migrated = true; }
+    if (migrated) localStorage.setItem(MEASURE_STORAGE, JSON.stringify(items));
+    return items;
+  } catch { return []; }
+}
+
+function persistMeasurement(item) {
+  const items = loadMeasurements();
+  items.push(item);
+  try { localStorage.setItem(MEASURE_STORAGE, JSON.stringify(items)); } catch { }
+}
+
+function drawSavedMeasurement(item) {
+  const label = { permanent: true, direction: 'top', className: 'measure-label' };
+  const clickable = { interactive: true, bubblingMouseEvents: false };
+  let layer = null;
+  if (item.type === 'circle' && item.points.length === 1 && item.radius > 0) {
+    layer = L.circle(item.points[0], { radius: item.radius, ...CIRCLE_STYLE, ...clickable })
+      .bindTooltip(`Absperrung r = ${formatDistance(item.radius)}`, { ...label, direction: 'center' });
+  } else if (item.type === 'area' && item.points.length >= 3) {
+    layer = L.polygon(item.points, { ...AREA_STYLE, ...clickable })
+      .bindTooltip(formatArea(geodesicArea(item.points)), { ...label, direction: 'center' });
+  } else if (item.type === 'distance' && item.points.length >= 2) {
+    layer = L.polyline(item.points, { ...LINE_STYLE, ...clickable })
+      .bindTooltip(distanceLabel(pathLength(item.points)), label);
+  }
+  if (!layer) return;
+  layer.on('click', event => onSavedShapeClick(item, event));
+  layer.addTo(state.measure.group);
+  state.measure.saved.set(item.id, layer);
+}
+
+function onSavedShapeClick(item, event) {
+  if (state.measure.active) { handleMeasureClick(event); return; }
+  const description = measurementDescription(item);
+  L.popup().setLatLng(event.latlng).setContent(
+    `<div class="measure-popup"><strong>${escapeHtml(description.title)}</strong><p>${escapeHtml(description.value)}</p><div class="measure-popup-actions"><button type="button" class="measure-edit-button" data-id="${item.id}">Bearbeiten</button><button type="button" class="measure-delete-button" data-id="${item.id}">Löschen</button></div></div>`
+  ).openOn(state.map);
+}
+
+function editMeasurement(id) {
+  const item = loadMeasurements().find(entry => entry.id === id);
+  if (!item) return;
+  state.map.closePopup();
+  removeMeasurement(id);
+  if ($('measureBar').hidden) toggleMeasure();
+  setMeasureMode(item.type);
+  state.measure.editingId = item.id;
+  state.measure.editingBackup = item;
+  if (item.type === 'circle') $('radiusInput').value = String(Math.round(item.radius));
+  for (const point of item.points) {
+    state.measure.points.push([point[0], point[1]]);
+    addVertexMarker(point, state.measure.points.length - 1);
+  }
+  updateWorkingMeasure();
+  toast('Punkte verschieben, dann mit „Fertig“ speichern.');
+}
+
+function measurementDescription(item) {
+  if (item.type === 'circle') return { title: 'Absperrkreis', value: `Radius ${formatDistance(item.radius)}` };
+  if (item.type === 'area') return { title: 'Fläche', value: formatArea(geodesicArea(item.points)) };
+  return { title: 'Strecke', value: distanceLabel(pathLength(item.points)) };
+}
+
+function removeMeasurement(id) {
+  const layer = state.measure.saved.get(id);
+  if (layer) { state.measure.group.removeLayer(layer); state.measure.saved.delete(id); }
+  const items = loadMeasurements().filter(item => item.id !== id);
+  try { localStorage.setItem(MEASURE_STORAGE, JSON.stringify(items)); } catch { }
+}
+
+function deleteMeasurement(id) {
+  removeMeasurement(id);
+  state.map.closePopup();
+  toast('Messung gelöscht.');
+}
+
+function toggleMeasure() {
+  if ($('measureBar').hidden) {
+    if (state.signs.active) closeSigns();
+    $('measureBar').hidden = false;
+    state.measure.active = true;
+    $('measureButton').setAttribute('aria-expanded', 'true');
+    closePanel();
+    $('searchBox').hidden = true;
+    $('searchButton').setAttribute('aria-expanded', 'false');
+    state.map.getContainer().classList.add('measuring');
+    setMeasureMode(state.measure.mode || 'distance');
+  } else {
+    closeMeasure();
+  }
+}
+
+function closeMeasure() {
+  finishMeasurement(true);
+  state.measure.active = false;
+  $('measureBar').hidden = true;
+  $('measureButton').setAttribute('aria-expanded', 'false');
+  state.map.getContainer().classList.remove('measuring');
+}
+
+function setMeasureMode(mode) {
+  finishMeasurement(true);
+  state.measure.mode = mode;
+  for (const button of document.querySelectorAll('.measure-mode')) button.classList.toggle('active', button.dataset.mode === mode);
+  $('circleRadiusRow').hidden = mode !== 'circle';
+  $('measureHint').textContent = modeHint(mode);
+}
+
+function modeHint(mode) {
+  if (mode === 'circle') return 'Mittelpunkt antippen – Radius per Vorwahl, Eingabe oder Tippen auf den Rand.';
+  if (mode === 'area') return 'Eckpunkte der Fläche antippen (mindestens drei). Punkte sind verschiebbar.';
+  return 'Punkte entlang der Strecke antippen. Punkte sind verschiebbar.';
+}
+
+function handleMeasureClick(event) {
+  const measure = state.measure;
+  if (!measure.mode) return;
+  const point = [event.latlng.lat, event.latlng.lng];
+  if (measure.mode === 'circle') {
+    if (!measure.points.length) {
+      measure.points.push(point);
+      addVertexMarker(point, 0);
+    } else {
+      $('radiusInput').value = String(Math.max(10, Math.round(L.latLng(measure.points[0]).distanceTo(event.latlng))));
+    }
+  } else {
+    measure.points.push(point);
+    addVertexMarker(point, measure.points.length - 1);
+  }
+  updateWorkingMeasure();
+}
+
+function addVertexMarker(point, index) {
+  const marker = L.marker(point, { draggable: true, icon: L.divIcon({ className: 'measure-vertex', iconSize: [26, 26] }) }).addTo(state.measure.group);
+  marker.on('drag', () => {
+    const position = marker.getLatLng();
+    state.measure.points[index] = [position.lat, position.lng];
+    updateWorkingMeasure();
+  });
+  state.measure.markers.push(marker);
+}
+
+function circleRadius() {
+  const value = Number($('radiusInput').value);
+  return Number.isFinite(value) && value >= 10 ? Math.min(value, 10000) : 50;
+}
+
+function updateWorkingMeasure() {
+  const measure = state.measure;
+  if (measure.tempLayer) { measure.group.removeLayer(measure.tempLayer); measure.tempLayer = null; }
+  let hint = '';
+  if (measure.mode === 'distance' && measure.points.length >= 2) {
+    measure.tempLayer = L.polyline(measure.points, LINE_STYLE);
+    hint = `Strecke: ${distanceLabel(pathLength(measure.points))}`;
+  } else if (measure.mode === 'area' && measure.points.length >= 3) {
+    measure.tempLayer = L.polygon(measure.points, AREA_STYLE);
+    hint = `Fläche: ${formatArea(geodesicArea(measure.points))}`;
+  } else if (measure.mode === 'circle' && measure.points.length) {
+    measure.tempLayer = L.circle(measure.points[0], { radius: circleRadius(), ...CIRCLE_STYLE });
+    hint = `Absperrkreis: Radius ${formatDistance(circleRadius())}`;
+  }
+  if (measure.tempLayer) measure.tempLayer.addTo(measure.group);
+  if (hint) $('measureHint').textContent = hint;
+}
+
+function finishMeasurement(save) {
+  const measure = state.measure;
+  const valid = (measure.mode === 'distance' && measure.points.length >= 2)
+    || (measure.mode === 'area' && measure.points.length >= 3)
+    || (measure.mode === 'circle' && measure.points.length === 1);
+  if (save && valid) {
+    const item = { id: measure.editingId || crypto.randomUUID(), type: measure.mode, points: measure.points };
+    if (measure.mode === 'circle') item.radius = circleRadius();
+    persistMeasurement(item);
+    drawSavedMeasurement(item);
+  } else if (save && measure.editingId && measure.editingBackup) {
+    // Bearbeitung ohne gültiges Ergebnis abgebrochen – Original wiederherstellen.
+    persistMeasurement(measure.editingBackup);
+    drawSavedMeasurement(measure.editingBackup);
+  }
+  measure.editingId = null;
+  measure.editingBackup = null;
+  if (measure.tempLayer) { measure.group.removeLayer(measure.tempLayer); measure.tempLayer = null; }
+  for (const marker of measure.markers) measure.group.removeLayer(marker);
+  measure.markers = [];
+  measure.points = [];
+  if (measure.mode && state.measure.active) $('measureHint').textContent = modeHint(measure.mode);
+}
+
+function undoMeasurePoint() {
+  const measure = state.measure;
+  if (!measure.points.length) return;
+  measure.points.pop();
+  const marker = measure.markers.pop();
+  if (marker) measure.group.removeLayer(marker);
+  $('measureHint').textContent = modeHint(measure.mode);
+  updateWorkingMeasure();
+}
+
+async function clearMeasurements() {
+  if (!await confirmAction('Alle Messungen und Absperrbereiche wirklich löschen?')) return;
+  finishMeasurement(false);
+  state.measure.group.clearLayers();
+  state.measure.saved.clear();
+  localStorage.removeItem(MEASURE_STORAGE);
+  toast('Alle Messungen wurden gelöscht.');
+}
+
+function pathLength(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += L.latLng(points[i - 1]).distanceTo(L.latLng(points[i]));
+  return total;
+}
+
+// Geodätische Fläche über sphärischen Exzess (Kugelnäherung, ausreichend für Einsatzflächen).
+function geodesicArea(points) {
+  if (points.length < 3) return 0;
+  const rad = Math.PI / 180;
+  const radius = 6378137;
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [lat1, lng1] = points[i];
+    const [lat2, lng2] = points[(i + 1) % points.length];
+    sum += (lng2 - lng1) * rad * (2 + Math.sin(lat1 * rad) + Math.sin(lat2 * rad));
+  }
+  return Math.abs(sum * radius * radius / 2);
+}
+
+function formatDistance(meters) {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(2).replace('.', ',')} km` : `${Math.round(meters)} m`;
+}
+
+function formatArea(squareMeters) {
+  return squareMeters >= 10000
+    ? `${(squareMeters / 10000).toFixed(2).replace('.', ',')} ha`
+    : `${Math.round(squareMeters).toLocaleString('de-DE')} m²`;
+}
+
+function distanceLabel(meters) {
+  return `${formatDistance(meters)} · ≈ ${Math.ceil(meters / 20)} × B-Schlauch (20 m)`;
+}
+
+// ── Taktische Zeichen (eigener Kontext, getrennt von den Messwerkzeugen) ───
+const SIGN_STORAGE = 'navlog-ipad-signs';
+const SIGN_BASE = 'vendor/taktische-zeichen/';
+const SIGN_GROUPS = [
+  { title: 'Lage', signs: [
+    { key: 'flaechenbrand', name: 'Flächenbrand' },
+    { key: 'entstehungsbrand', name: 'Entstehungsbrand' },
+    { key: 'vollbrand', name: 'Vollbrand' },
+    { key: 'gefahr', name: 'Gefahr' },
+    { key: 'richtung', name: 'Ausbreitungsrichtung', rotatable: true },
+    { key: 'ankerpunkt', name: 'Ankerpunkt' },
+    { key: 'lookout', name: 'Lookout (Beobachtungsposten)' }
+  ] },
+  { title: 'Führung', signs: [
+    { key: 'einsatzleitung', name: 'Einsatzleitung' },
+    { key: 'einsatzabschnitt', name: 'Einsatzabschnittsleitung' },
+    { key: 'bereitstellungsraum', name: 'Bereitstellungsraum' },
+    { key: 'lotsenstelle', name: 'Lotsenstelle' },
+    { key: 'hubschrauberlandeplatz', name: 'Hubschrauberlandeplatz' }
+  ] },
+  { title: 'Kräfte', signs: [
+    { key: 'elw1', name: 'ELW 1' },
+    { key: 'elw2', name: 'ELW 2' },
+    { key: 'tlf', name: 'Tanklöschfahrzeug' },
+    { key: 'loeschfahrzeug', name: 'Löschfahrzeug' },
+    { key: 'geraetewagen', name: 'Gerätewagen' },
+    { key: 'mehrzweckfahrzeug', name: 'Mehrzweckfahrzeug' },
+    { key: 'schlauchwagen', name: 'Schlauchwagen' },
+    { key: 'sw2000', name: 'Schlauchwagen 2000 KatS' },
+    { key: 'wechsellader', name: 'Wechselladerfahrzeug' },
+    { key: 'rettungswagen', name: 'Rettungswagen' },
+    { key: 'drohne', name: 'Drohne' },
+    { key: 'loeschgruppe', name: 'Löschgruppe' },
+    { key: 'hubschrauber', name: 'Hubschrauber' }
+  ] },
+  { title: 'Wasser', signs: [
+    { key: 'wasserentnahme', name: 'Wasserentnahmestelle' }
+  ] }
+];
+const SIGN_INDEX = new Map(SIGN_GROUPS.flatMap(group => group.signs).map(sign => [sign.key, sign]));
+
+function initSigns() {
+  state.signs.group = L.layerGroup().addTo(state.map);
+  renderSignPalette();
+  for (const item of loadSigns()) drawSign(item);
+}
+
+function renderSignPalette() {
+  const palette = $('signPalette');
+  palette.replaceChildren();
+  for (const group of SIGN_GROUPS) {
+    const title = document.createElement('h3');
+    title.textContent = group.title;
+    palette.append(title);
+    const row = document.createElement('div');
+    row.className = 'sign-palette-row';
+    for (const sign of group.signs) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sign-symbol';
+      button.dataset.sign = sign.key;
+      button.title = sign.name;
+      button.setAttribute('aria-label', sign.name);
+      const image = document.createElement('img');
+      image.src = `${SIGN_BASE}${sign.key}.svg`;
+      image.alt = '';
+      button.append(image);
+      button.addEventListener('click', () => selectSign(sign.key));
+      row.append(button);
+    }
+    palette.append(row);
+  }
+}
+
+function toggleSigns() { $('signBar').hidden ? openSigns() : closeSigns(); }
+
+function openSigns() {
+  if (state.measure.active) closeMeasure();
+  $('signBar').hidden = false;
+  state.signs.active = true;
+  $('signsButton').setAttribute('aria-expanded', 'true');
+  closePanel();
+  $('searchBox').hidden = true;
+  $('searchButton').setAttribute('aria-expanded', 'false');
+  state.map.getContainer().classList.add('measuring');
+  for (const marker of state.signs.saved.values()) marker.dragging?.enable();
+  if (state.signs.selected) selectSign(state.signs.selected);
+  else setSignHint('Zeichen wählen und auf der Karte platzieren.');
+}
+
+function closeSigns() {
+  state.signs.active = false;
+  state.signs.editingId = null;
+  $('signBar').hidden = true;
+  $('signsButton').setAttribute('aria-expanded', 'false');
+  if (!state.measure.active) state.map.getContainer().classList.remove('measuring');
+  for (const marker of state.signs.saved.values()) marker.dragging?.disable();
+}
+
+function selectSign(key) {
+  const sign = SIGN_INDEX.get(key);
+  if (!sign) return;
+  state.signs.selected = key;
+  state.signs.editingId = null;
+  for (const button of document.querySelectorAll('.sign-symbol')) button.classList.toggle('active', button.dataset.sign === key);
+  $('signRotationRow').hidden = !sign.rotatable;
+  if (sign.rotatable) updateSignRotationUi();
+  setSignHint(`${sign.name}: auf die Karte tippen zum Platzieren.`);
+}
+
+function updateSignRotationUi() {
+  const degrees = Number($('signRotationInput').value) || 0;
+  $('signRotationValue').textContent = `${degrees}° ${compassLabel(degrees)}`;
+  $('signRotationPreview').style.transform = `rotate(${degrees - 90}deg)`;
+}
+
+function handleSignClick(event) {
+  if (!state.signs.selected) { setSignHint('Bitte zuerst ein Zeichen aus der Palette wählen.'); return; }
+  const sign = SIGN_INDEX.get(state.signs.selected);
+  const item = {
+    id: crypto.randomUUID(),
+    key: state.signs.selected,
+    lat: event.latlng.lat,
+    lng: event.latlng.lng,
+    label: $('signLabelInput').value.trim()
+  };
+  if (sign?.rotatable) item.rotation = Number($('signRotationInput').value) || 0;
+  persistSign(item);
+  drawSign(item);
+}
+
+function drawSign(item) {
+  const marker = L.marker([item.lat, item.lng], { icon: signIcon(item), draggable: true, bubblingMouseEvents: false });
+  marker.on('click', event => onSignMarkerClick(item.id, event));
+  marker.on('dragend', () => {
+    const position = marker.getLatLng();
+    updateSign(item.id, { lat: position.lat, lng: position.lng });
+  });
+  marker.addTo(state.signs.group);
+  if (!state.signs.active) marker.dragging.disable();
+  state.signs.saved.set(item.id, marker);
+}
+
+function signIcon(item) {
+  const sign = SIGN_INDEX.get(item.key);
+  // Der Richtungspfeil der Bibliothek zeigt nach Osten; 0° soll Norden sein.
+  const rotation = sign?.rotatable ? ` style="transform:rotate(${Math.round((item.rotation || 0) - 90)}deg)"` : '';
+  const label = item.label ? `<span class="sign-marker-label">${escapeHtml(item.label)}</span>` : '';
+  return L.divIcon({ className: 'sign-marker', iconSize: [48, 48], iconAnchor: [24, 24], html: `<img src="${SIGN_BASE}${item.key}.svg" alt="${escapeHtml(sign?.name || '')}"${rotation}>${label}` });
+}
+
+function onSignMarkerClick(id, event) {
+  const item = loadSigns().find(entry => entry.id === id);
+  if (!item) return;
+  const sign = SIGN_INDEX.get(item.key);
+  if (state.signs.active) { startSignEdit(item, sign); return; }
+  L.popup().setLatLng(event.latlng).setContent(
+    `<div class="measure-popup"><strong>${escapeHtml(sign?.name || 'Taktisches Zeichen')}</strong>${item.label ? `<p>${escapeHtml(item.label)}</p>` : ''}<div class="measure-popup-actions"><button type="button" class="sign-edit-button" data-id="${item.id}">Bearbeiten</button><button type="button" class="sign-delete-button" data-id="${item.id}">Löschen</button></div></div>`
+  ).openOn(state.map);
+}
+
+function startSignEdit(item, sign) {
+  state.signs.editingId = item.id;
+  state.signs.selected = null;
+  for (const button of document.querySelectorAll('.sign-symbol')) button.classList.remove('active');
+  $('signLabelInput').value = item.label || '';
+  $('signRotationRow').hidden = !sign?.rotatable;
+  if (sign?.rotatable) {
+    $('signRotationInput').value = String(Math.round(item.rotation || 0));
+    updateSignRotationUi();
+  }
+  setSignHint(`${sign?.name || 'Zeichen'} bearbeiten: ziehen zum Verschieben, Beschriftung und Richtung wirken sofort.`);
+}
+
+function editSign(id) {
+  state.map.closePopup();
+  if ($('signBar').hidden) openSigns();
+  const item = loadSigns().find(entry => entry.id === id);
+  if (!item) return;
+  startSignEdit(item, SIGN_INDEX.get(item.key));
+}
+
+function onSignOptionInput() {
+  updateSignRotationUi();
+  const id = state.signs.editingId;
+  if (!id) return;
+  const item = loadSigns().find(entry => entry.id === id);
+  if (!item) return;
+  const changes = { label: $('signLabelInput').value.trim() };
+  if (SIGN_INDEX.get(item.key)?.rotatable) changes.rotation = Number($('signRotationInput').value) || 0;
+  updateSign(id, changes);
+}
+
+function updateSign(id, changes) {
+  const items = loadSigns();
+  const item = items.find(entry => entry.id === id);
+  if (!item) return;
+  Object.assign(item, changes);
+  saveSigns(items);
+  const marker = state.signs.saved.get(id);
+  if (marker) {
+    marker.setLatLng([item.lat, item.lng]);
+    marker.setIcon(signIcon(item));
+  }
+}
+
+function loadSigns() {
+  try {
+    const items = JSON.parse(localStorage.getItem(SIGN_STORAGE) || '[]');
+    return Array.isArray(items) ? items : [];
+  } catch { return []; }
+}
+
+function saveSigns(items) {
+  try { localStorage.setItem(SIGN_STORAGE, JSON.stringify(items)); } catch { }
+}
+
+function persistSign(item) {
+  const items = loadSigns();
+  items.push(item);
+  saveSigns(items);
+}
+
+function removeSign(id) {
+  const marker = state.signs.saved.get(id);
+  if (marker) { state.signs.group.removeLayer(marker); state.signs.saved.delete(id); }
+  saveSigns(loadSigns().filter(item => item.id !== id));
+  if (state.signs.editingId === id) state.signs.editingId = null;
+}
+
+function deleteSign(id) {
+  removeSign(id);
+  state.map.closePopup();
+  toast('Zeichen gelöscht.');
+}
+
+async function clearSigns() {
+  if (!await confirmAction('Alle taktischen Zeichen wirklich löschen?')) return;
+  state.signs.group.clearLayers();
+  state.signs.saved.clear();
+  state.signs.editingId = null;
+  localStorage.removeItem(SIGN_STORAGE);
+  toast('Alle taktischen Zeichen wurden gelöscht.');
+}
+
+function setSignHint(text) { $('signHint').textContent = text; }
+
+// ── Wind und Wetter (Open-Meteo, ohne API-Schlüssel) ───────────────────────
+const WEATHER_STORAGE = 'navlog-ipad-weather';
+
+function toggleWeather() {
+  if ($('weatherBox').hidden) {
+    $('weatherBox').hidden = false;
+    $('weatherButton').setAttribute('aria-expanded', 'true');
+    closePanel();
+    const cached = loadWeatherCache();
+    if (cached) renderWeather(cached, true);
+    refreshWeather();
+  } else {
+    closeWeather();
+  }
+}
+
+function closeWeather() {
+  $('weatherBox').hidden = true;
+  $('weatherButton').setAttribute('aria-expanded', 'false');
+  removeWindMarker();
+}
+
+function loadWeatherCache() {
+  try {
+    const entry = JSON.parse(localStorage.getItem(WEATHER_STORAGE) || 'null');
+    return entry?.data?.current ? entry : null;
+  } catch { return null; }
+}
+
+async function refreshWeather() {
+  const center = state.map.getCenter();
+  $('weatherMeta').textContent = 'Wetterdaten werden geladen …';
+  try {
+    const url = new URL('https://api.open-meteo.com/v1/forecast');
+    url.search = new URLSearchParams({
+      latitude: center.lat.toFixed(4), longitude: center.lng.toFixed(4),
+      current: 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+      hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+      wind_speed_unit: 'kmh', timezone: 'auto', forecast_days: '2'
+    });
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Wetterdienst antwortet mit Status ${response.status}`);
+    const data = await response.json();
+    if (!data?.current) throw new Error('Unerwartete Antwort des Wetterdienstes.');
+    const entry = { fetchedAt: Date.now(), lat: center.lat, lon: center.lng, data };
+    try { localStorage.setItem(WEATHER_STORAGE, JSON.stringify(entry)); } catch { }
+    renderWeather(entry, false);
+  } catch {
+    const cached = loadWeatherCache();
+    if (cached) {
+      renderWeather(cached, true);
+      toast('Wetterdaten momentan nicht abrufbar – letzter gespeicherter Stand wird angezeigt.');
+    } else {
+      $('weatherContent').innerHTML = '<p class="error">Wetterdaten konnten nicht geladen werden. Bitte Internetverbindung prüfen.</p>';
+      $('weatherMeta').textContent = '';
+    }
+  }
+}
+
+function renderWeather(entry, stale) {
+  const current = entry.data.current;
+  const windFrom = current.wind_direction_10m;
+  const windTo = (windFrom + 180) % 360;
+  let html = `<div class="weather-wind">${windArrowSvg(windTo, 'big')}<div><strong>Wind aus ${compassLabel(windFrom)} (${Math.round(windFrom)}°)</strong><span>weht nach ${compassLabel(windTo)} · ${Math.round(current.wind_speed_10m)} km/h, Böen ${Math.round(current.wind_gusts_10m)} km/h</span></div></div>`;
+  html += '<div class="weather-current">'
+    + weatherTile(`${String(current.temperature_2m).replace('.', ',')} °C`, 'Temperatur')
+    + weatherTile(`${Math.round(current.relative_humidity_2m)} %`, 'Luftfeuchte')
+    + weatherTile(`${String(current.precipitation).replace('.', ',')} mm`, 'Niederschlag')
+    + '</div>';
+
+  const hourly = entry.data.hourly;
+  let rows = '';
+  let shiftNotice = '';
+  const start = hourly?.time ? hourly.time.findIndex(time => time > current.time) : -1;
+  if (start >= 0) {
+    for (let i = start; i < Math.min(start + 12, hourly.time.length); i++) {
+      const hourFrom = hourly.wind_direction_10m[i];
+      const warn = angleDiff(hourFrom, windFrom) > 45;
+      if (warn && !shiftNotice) shiftNotice = `Winddrehung angekündigt: gegen ${hourly.time[i].slice(11, 16)} Uhr auf Wind aus ${compassLabel(hourFrom)}.`;
+      rows += `<div class="forecast-row${warn ? ' warn' : ''}"><span>${hourly.time[i].slice(11, 16)}</span>${windArrowSvg((hourFrom + 180) % 360)}<span>aus ${compassLabel(hourFrom)}</span><span>${Math.round(hourly.wind_speed_10m[i])} / ${Math.round(hourly.wind_gusts_10m[i])} km/h</span></div>`;
+    }
+  }
+  if (shiftNotice) html += `<p class="weather-note warn">⚠ ${shiftNotice}</p>`;
+  if (rows) html += `<div class="weather-forecast"><h3>Wind – nächste 12 Stunden (Mittel / Böen)</h3>${rows}</div>`;
+  $('weatherContent').innerHTML = html;
+
+  const time = new Date(entry.fetchedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  $('weatherMeta').textContent = `Kartenmitte ${entry.lat.toFixed(3)}, ${entry.lon.toFixed(3)} · Stand ${time} Uhr${stale ? ' · möglicherweise nicht aktuell' : ''}`;
+  $('weatherMeta').classList.toggle('warn', Boolean(stale));
+  updateWindMarker(entry, windTo);
+}
+
+function weatherTile(value, label) {
+  return `<div class="weather-tile"><strong>${value}</strong><span>${label}</span></div>`;
+}
+
+function windArrowSvg(degreesTo, extraClass = '') {
+  return `<svg class="wind-arrow ${extraClass}" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${Math.round(degreesTo)}deg)"><path fill="currentColor" d="M12 2 18.5 20 12 15.6 5.5 20Z"/></svg>`;
+}
+
+function compassLabel(degrees) {
+  return ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round((((degrees % 360) + 360) % 360) / 45) % 8];
+}
+
+function angleDiff(a, b) {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+function updateWindMarker(entry, degreesTo) {
+  removeWindMarker();
+  const icon = L.divIcon({ className: 'wind-map-marker', iconSize: [44, 44], html: windArrowSvg(degreesTo, 'map') });
+  state.weather.marker = L.marker([entry.lat, entry.lon], { icon, interactive: false }).addTo(state.map);
+}
+
+function removeWindMarker() {
+  if (state.weather.marker) { state.map.removeLayer(state.weather.marker); state.weather.marker = null; }
 }
 
 function setStatus(text) { $('status').textContent = text; }

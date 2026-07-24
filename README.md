@@ -16,8 +16,12 @@ Die Oberfläche kann für eine Organisation mit eigenem Namen, Logo, Startgebiet
 - Adresssuche über OpenStreetMap/Nominatim
 - abrufbare Symbol- und Objektinformationen
 - QR-Code zur Übergabe eines Ziels an eine Navigations-App
+- Messwerkzeuge: Strecken (mit B-Schlauch-Umrechnung), Flächen und Absperrkreise mit Radien-Vorwahl nach FwDV 500; Messungen bleiben lokal gespeichert
+- taktische Zeichen für Waldbrandeinsätze (Lage inkl. Ankerpunkt und Lookout, Führung, Kräfte, Wasser) mit Beschriftung, drehbarem Ausbreitungspfeil samt Richtungsvorschau und nachträglicher Bearbeitung; getrennt von den Messwerkzeugen
+- Wind- und Wetteranzeige für die Kartenmitte mit Windpfeil auf der Karte, 12-Stunden-Windvorhersage und Hinweis auf angekündigte Winddrehungen (Open-Meteo, ohne API-Schlüssel)
+- Maßstabsleiste
 - speicherbare Startansicht und Layerauswahl
-- Druckansicht mit Legende
+- Druckansicht mit Legende (inklusive eingezeichneter Messungen und Absperrbereiche)
 - touchgerechte Bedienung und Unterstützung der iPad-Safe-Areas
 - lokal zwischengespeicherte App-Oberfläche für den Start ohne erreichbaren Webserver
 
@@ -41,7 +45,8 @@ https://feuerwehr-einhausen.github.io/NavLogKarte-iPad/
 
 ## Einschränkungen
 
-- NavLog-WMS, Adresssuche und Kartenkacheln benötigen eine Internetverbindung.
+- NavLog-WMS, Adresssuche, Wetterdaten und Kartenkacheln benötigen eine Internetverbindung.
+- Die Wetteranzeige zeigt Modellwerte für die Kartenmitte; bei Verbindungsabriss wird der letzte gespeicherte Stand mit Zeitstempel angezeigt. Die Beobachtung an der Einsatzstelle bleibt maßgeblich.
 - Updates, Neuinstallationen und zusätzliche iPads benötigen die erreichbare HTTPS-Bereitstellung.
 - iPadOS kann lokale Website- und App-Daten entfernen. Eine installierte PWA ersetzt daher keine zentral administrierte Offline-Kartenlösung.
 - Die Anwendung besitzt keinen eigenen WMS-Proxy; der verwendete WMS muss Browseranfragen per CORS erlauben.
@@ -61,6 +66,8 @@ Danach `http://localhost:8080` im Browser öffnen. Die produktive Installation a
 - mgrs 2.1.0 – MIT
 - QRCode.js 1.0.0 – MIT
 - OpenStreetMap/Nominatim – externe Karten- und Suchdienste mit eigenen Nutzungsbedingungen
+- Open-Meteo – Wetterdaten (CC BY 4.0), Abruf ohne API-Schlüssel direkt vom Browser
+- „Taktische Zeichen“ von Jonas Köritz – Symbolgrafiken (CC BY 4.0); Details in [wwwroot/vendor/taktische-zeichen/LIZENZ.md](wwwroot/vendor/taktische-zeichen/LIZENZ.md)
 
 ## Lizenz
 

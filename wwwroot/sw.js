@@ -1,10 +1,10 @@
-const CACHE_NAME = 'navlog-ipad-shell-v11';
+const CACHE_NAME = 'navlog-ipad-shell-v18';
 const APP_SHELL = [
   './',
-  './index.html?v=20260724-11',
+  './index.html?v=20260725-18',
   './offline.html',
-  './app.css?v=20260724-11',
-  './app.js?v=20260724-11',
+  './app.css?v=20260725-18',
+  './app.js?v=20260725-18',
   './manifest.webmanifest',
   './assets/feuerwehr-einhausen-logo.png',
   './assets/icons/apple-touch-icon.png',
@@ -18,7 +18,33 @@ const APP_SHELL = [
   './vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png',
   './vendor/mgrs.js',
-  './vendor/qrcode.min.js'
+  './vendor/qrcode.min.js',
+  './vendor/taktische-zeichen/flaechenbrand.svg',
+  './vendor/taktische-zeichen/entstehungsbrand.svg',
+  './vendor/taktische-zeichen/vollbrand.svg',
+  './vendor/taktische-zeichen/gefahr.svg',
+  './vendor/taktische-zeichen/richtung.svg',
+  './vendor/taktische-zeichen/einsatzleitung.svg',
+  './vendor/taktische-zeichen/einsatzabschnitt.svg',
+  './vendor/taktische-zeichen/bereitstellungsraum.svg',
+  './vendor/taktische-zeichen/lotsenstelle.svg',
+  './vendor/taktische-zeichen/hubschrauberlandeplatz.svg',
+  './vendor/taktische-zeichen/tlf.svg',
+  './vendor/taktische-zeichen/loeschfahrzeug.svg',
+  './vendor/taktische-zeichen/schlauchwagen.svg',
+  './vendor/taktische-zeichen/loeschgruppe.svg',
+  './vendor/taktische-zeichen/hubschrauber.svg',
+  './vendor/taktische-zeichen/wasserentnahme.svg',
+  './vendor/taktische-zeichen/ankerpunkt.svg',
+  './vendor/taktische-zeichen/lookout.svg',
+  './vendor/taktische-zeichen/elw1.svg',
+  './vendor/taktische-zeichen/elw2.svg',
+  './vendor/taktische-zeichen/geraetewagen.svg',
+  './vendor/taktische-zeichen/mehrzweckfahrzeug.svg',
+  './vendor/taktische-zeichen/sw2000.svg',
+  './vendor/taktische-zeichen/wechsellader.svg',
+  './vendor/taktische-zeichen/rettungswagen.svg',
+  './vendor/taktische-zeichen/drohne.svg'
 ];
 
 self.addEventListener('install', event => {
@@ -36,8 +62,8 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then(response => {
       if (response.ok) return response;
-      return caches.match('./index.html?v=20260724-11').then(cached => cached || caches.match('./offline.html'));
-    }).catch(() => caches.match('./index.html?v=20260724-11').then(cached => cached || caches.match('./offline.html'))));
+      return caches.match('./index.html?v=20260725-18').then(cached => cached || caches.match('./offline.html'));
+    }).catch(() => caches.match('./index.html?v=20260725-18').then(cached => cached || caches.match('./offline.html'))));
     return;
   }
 

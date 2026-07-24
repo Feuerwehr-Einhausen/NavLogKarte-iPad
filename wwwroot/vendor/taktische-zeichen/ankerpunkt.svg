@@ -1,0 +1,10 @@
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+	<title>Ankerpunkt</title>
+	<circle cx="128" cy="44" r="18" fill="none" stroke="#000000" stroke-width="12"/>
+	<path d="M128,62 L128,206" stroke="#000000" stroke-width="12"/>
+	<path d="M84,94 L172,94" stroke="#000000" stroke-width="12" stroke-linecap="round"/>
+	<path d="M46,140 C54,192 86,210 128,210 C170,210 202,192 210,140" fill="none" stroke="#000000" stroke-width="12" stroke-linecap="round"/>
+	<path d="M46,140 L40,112 M46,140 L74,146" fill="none" stroke="#000000" stroke-width="12" stroke-linecap="round"/>
+	<path d="M210,140 L216,112 M210,140 L182,146" fill="none" stroke="#000000" stroke-width="12" stroke-linecap="round"/>
+</svg>

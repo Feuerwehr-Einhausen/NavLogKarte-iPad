@@ -1,0 +1,7 @@
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+	<title>Lookout (Beobachtungsposten)</title>
+	<path d="M24,128 C64,74 192,74 232,128 C192,182 64,182 24,128 Z" fill="none" stroke="#000000" stroke-width="12" stroke-linejoin="round"/>
+	<circle cx="128" cy="128" r="34" fill="none" stroke="#000000" stroke-width="12"/>
+	<circle cx="128" cy="128" r="11" fill="#000000"/>
+</svg>

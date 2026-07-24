@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://gdw.navlog.de https://*.tile.openstreetmap.org; connect-src 'self' https://gdw.navlog.de https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://gdw.navlog.de https://*.tile.openstreetmap.org; connect-src 'self' https://gdw.navlog.de https://nominatim.openstreetmap.org https://api.open-meteo.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#9f1d20">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260724-11">
+  <link rel="stylesheet" href="app.css?v=20260725-18">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -45,9 +45,72 @@
     <nav class="map-tools" aria-label="Kartenwerkzeuge">
       <button id="locateButton" type="button" title="Eigenen Standort anzeigen">◎<span>Standort</span></button>
       <button id="homeButton" type="button" title="Zum Startgebiet zurück">⌂<span>Start</span></button>
+      <button id="measureButton" type="button" title="Strecken, Flächen und Absperrbereiche messen" aria-controls="measureBar" aria-expanded="false">⊿<span>Messen</span></button>
+      <button id="signsButton" type="button" title="Taktische Zeichen setzen" aria-controls="signBar" aria-expanded="false">⚑<span>Zeichen</span></button>
+      <button id="weatherButton" type="button" title="Wind und Wetter für die Kartenmitte" aria-controls="weatherBox" aria-expanded="false">☁<span>Wetter</span></button>
       <button id="printButton" type="button" title="Karte mit Legende drucken">▣<span>Drucken</span></button>
       <button id="fullscreenButton" type="button" title="Vollbild umschalten">⛶<span>Vollbild</span></button>
     </nav>
+
+    <section id="measureBar" class="measure-bar" hidden aria-label="Messwerkzeuge">
+      <div class="measure-header">
+        <strong>Messwerkzeuge</strong>
+        <button id="measureClose" type="button" class="close-button" aria-label="Messwerkzeuge schließen">×</button>
+      </div>
+      <div class="measure-modes" role="group" aria-label="Messmodus wählen">
+        <button type="button" class="measure-mode" data-mode="distance">Strecke</button>
+        <button type="button" class="measure-mode" data-mode="area">Fläche</button>
+        <button type="button" class="measure-mode" data-mode="circle">Absperrkreis</button>
+      </div>
+      <div id="circleRadiusRow" class="circle-radius-row" hidden>
+        <button type="button" class="radius-preset" data-radius="50" title="Gefahrenbereich nach FwDV 500">50 m</button>
+        <button type="button" class="radius-preset" data-radius="100">100 m</button>
+        <button type="button" class="radius-preset" data-radius="300" title="Absperrbereich nach FwDV 500">300 m</button>
+        <label class="sr-only" for="radiusInput">Radius in Metern</label>
+        <input id="radiusInput" type="number" inputmode="numeric" min="10" max="10000" step="10" value="50">
+        <span aria-hidden="true">m</span>
+      </div>
+      <div class="measure-actions">
+        <button id="measureUndo" type="button">↩ Punkt zurück</button>
+        <button id="measureFinish" type="button">✓ Fertig</button>
+        <button id="measureClear" type="button">Alle löschen</button>
+      </div>
+      <p id="measureHint" class="measure-hint">Modus wählen und Punkte auf der Karte antippen.</p>
+    </section>
+
+    <section id="signBar" class="sign-bar" hidden aria-label="Taktische Zeichen">
+      <div class="measure-header">
+        <strong>Taktische Zeichen</strong>
+        <button id="signClose" type="button" class="close-button" aria-label="Taktische Zeichen schließen">×</button>
+      </div>
+      <div id="signPalette" class="sign-palette"></div>
+      <div class="sign-options">
+        <label class="sign-label-field">Beschriftung (optional)<input id="signLabelInput" maxlength="40" placeholder="z. B. TLF 3000 Einhausen" autocomplete="off"></label>
+        <div id="signRotationRow" class="sign-rotation-row" hidden>
+          <label for="signRotationInput">Richtung</label>
+          <input id="signRotationInput" type="range" min="0" max="359" step="1" value="0">
+          <img id="signRotationPreview" class="sign-rotation-preview" src="vendor/taktische-zeichen/richtung.svg" alt="Vorschau der Pfeilrichtung">
+          <span id="signRotationValue">0° N</span>
+        </div>
+        <div class="measure-actions">
+          <button id="signClearAll" type="button">Alle Zeichen löschen</button>
+        </div>
+      </div>
+      <p id="signHint" class="measure-hint">Zeichen wählen und auf der Karte platzieren.</p>
+    </section>
+
+    <section id="weatherBox" class="weather-box" hidden aria-label="Wind und Wetter">
+      <div class="weather-header">
+        <h2>Wind &amp; Wetter</h2>
+        <div class="weather-header-actions">
+          <button id="weatherRefresh" class="icon-button" type="button" title="Für aktuelle Kartenmitte aktualisieren">↻</button>
+          <button id="closeWeather" class="close-button" type="button" aria-label="Wetter schließen">×</button>
+        </div>
+      </div>
+      <div id="weatherContent"><p class="muted">Wetterdaten werden geladen …</p></div>
+      <small id="weatherMeta"></small>
+      <small class="weather-attribution">Vorhersagedaten: Open-Meteo.com (CC BY 4.0). Modellwerte – die Beobachtung an der Einsatzstelle bleibt maßgeblich.</small>
+    </section>
 
     <aside id="printLegend" class="print-legend" aria-label="Drucklegende">
       <div class="print-legend-header">
@@ -104,6 +167,16 @@
     </form>
   </dialog>
 
+  <dialog id="confirmDialog" class="confirm-dialog">
+    <form method="dialog">
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button value="cancel" class="secondary-button" type="submit">Abbrechen</button>
+        <button id="confirmAcceptButton" value="confirm" class="primary-button" type="submit">Löschen</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="qrDialog" class="qr-dialog">
     <div class="qr-dialog-content">
       <button id="closeQrDialog" class="close-button qr-close" type="button" aria-label="QR-Code schließen">×</button>
@@ -120,6 +193,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260724-11"></script>
+  <script src="app.js?v=20260725-18"></script>
 </body>
 </html>
