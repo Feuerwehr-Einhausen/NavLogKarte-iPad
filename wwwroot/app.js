@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 const APP_BUILD = '2026-07-25';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false };
 const INITIAL_LAYER_PATTERNS = [
@@ -53,10 +53,12 @@ function wireUi() {
   $('resetAccessButton').addEventListener('click', resetAccess);
   $('measureButton').addEventListener('click', toggleMeasure);
   $('measureClose').addEventListener('click', closeMeasure);
+  $('measureCollapse').addEventListener('click', () => setSheetCollapsed('measureBar', !$('measureBar').classList.contains('collapsed')));
+  $('signCollapse').addEventListener('click', () => setSheetCollapsed('signBar', !$('signBar').classList.contains('collapsed')));
   $('measureUndo').addEventListener('click', undoMeasurePoint);
   $('measureFinish').addEventListener('click', () => finishMeasurement(true));
   $('measureClear').addEventListener('click', clearMeasurements);
-  for (const button of document.querySelectorAll('.measure-mode')) button.addEventListener('click', () => setMeasureMode(button.dataset.mode));
+  for (const button of document.querySelectorAll('.measure-mode')) button.addEventListener('click', () => { setMeasureMode(button.dataset.mode); collapseSheetOnPhone('measureBar'); });
   for (const button of document.querySelectorAll('.radius-preset')) button.addEventListener('click', () => { $('radiusInput').value = button.dataset.radius; updateWorkingMeasure(); });
   $('radiusInput').addEventListener('input', updateWorkingMeasure);
   $('signsButton').addEventListener('click', toggleSigns);
@@ -812,9 +814,32 @@ function deleteMeasurement(id) {
   toast('Messung gelöscht.');
 }
 
+// Auf dem Smartphone verdecken die Werkzeugleisten sonst die halbe Karte.
+// Nach der Auswahl klappen sie auf Kopfzeile plus Aktionen zusammen.
+const TOOL_SHEETS = {
+  measureBar: { toggle: 'measureCollapse', name: 'Messwerkzeuge' },
+  signBar: { toggle: 'signCollapse', name: 'Taktische Zeichen' }
+};
+
+function isPhoneLayout() { return window.matchMedia('(max-width:699px), (max-height:519px)').matches; }
+
+function setSheetCollapsed(sheetId, collapsed) {
+  const sheet = TOOL_SHEETS[sheetId];
+  if (!sheet) return;
+  $(sheetId).classList.toggle('collapsed', collapsed);
+  const toggle = $(sheet.toggle);
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-label', `${sheet.name} ${collapsed ? 'ausklappen' : 'einklappen'}`);
+}
+
+function collapseSheetOnPhone(sheetId) {
+  if (isPhoneLayout()) setSheetCollapsed(sheetId, true);
+}
+
 function toggleMeasure() {
   if ($('measureBar').hidden) {
     if (state.signs.active) closeSigns();
+    setSheetCollapsed('measureBar', false);
     $('measureBar').hidden = false;
     state.measure.active = true;
     $('measureButton').setAttribute('aria-expanded', 'true');
@@ -1045,7 +1070,7 @@ function renderSignPalette() {
       image.src = `${SIGN_BASE}${sign.key}.svg`;
       image.alt = '';
       button.append(image);
-      button.addEventListener('click', () => selectSign(sign.key));
+      button.addEventListener('click', () => { selectSign(sign.key); collapseSheetOnPhone('signBar'); });
       row.append(button);
     }
     palette.append(row);
@@ -1056,6 +1081,7 @@ function toggleSigns() { $('signBar').hidden ? openSigns() : closeSigns(); }
 
 function openSigns() {
   if (state.measure.active) closeMeasure();
+  setSheetCollapsed('signBar', false);
   $('signBar').hidden = false;
   state.signs.active = true;
   $('signsButton').setAttribute('aria-expanded', 'true');
@@ -1142,6 +1168,8 @@ function onSignMarkerClick(id, event) {
 function startSignEdit(item, sign) {
   state.signs.editingId = item.id;
   state.signs.selected = null;
+  // Zum Bearbeiten werden Beschriftung und Richtung gebraucht.
+  setSheetCollapsed('signBar', false);
   for (const button of document.querySelectorAll('.sign-symbol')) button.classList.remove('active');
   $('signLabelInput').value = item.label || '';
   $('signRotationRow').hidden = !sign?.rotatable;

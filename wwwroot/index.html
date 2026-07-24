@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260725-18">
+  <link rel="stylesheet" href="app.css?v=20260725-19">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -55,7 +55,10 @@
     <section id="measureBar" class="measure-bar" hidden aria-label="Messwerkzeuge">
       <div class="measure-header">
         <strong>Messwerkzeuge</strong>
-        <button id="measureClose" type="button" class="close-button" aria-label="Messwerkzeuge schließen">×</button>
+        <div class="sheet-header-actions">
+          <button id="measureCollapse" type="button" class="sheet-toggle" aria-controls="measureBar" aria-expanded="true" aria-label="Messwerkzeuge einklappen"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+          <button id="measureClose" type="button" class="close-button" aria-label="Messwerkzeuge schließen">×</button>
+        </div>
       </div>
       <div class="measure-modes" role="group" aria-label="Messmodus wählen">
         <button type="button" class="measure-mode" data-mode="distance">Strecke</button>
@@ -81,7 +84,10 @@
     <section id="signBar" class="sign-bar" hidden aria-label="Taktische Zeichen">
       <div class="measure-header">
         <strong>Taktische Zeichen</strong>
-        <button id="signClose" type="button" class="close-button" aria-label="Taktische Zeichen schließen">×</button>
+        <div class="sheet-header-actions">
+          <button id="signCollapse" type="button" class="sheet-toggle" aria-controls="signBar" aria-expanded="true" aria-label="Taktische Zeichen einklappen"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+          <button id="signClose" type="button" class="close-button" aria-label="Taktische Zeichen schließen">×</button>
+        </div>
       </div>
       <div id="signPalette" class="sign-palette"></div>
       <div class="sign-options">
@@ -193,6 +199,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260725-18"></script>
+  <script src="app.js?v=20260725-19"></script>
 </body>
 </html>

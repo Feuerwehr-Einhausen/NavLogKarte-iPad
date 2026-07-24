@@ -116,6 +116,11 @@ dialog p { margin:0; line-height:1.45; }
 .measure-bar, .sign-bar { position:absolute; z-index:820; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 24px)); display:grid; gap:8px; padding:10px; border:1px solid rgb(255 255 255 / .8); border-radius:14px; background:rgb(255 255 255 / .96); box-shadow:0 5px 20px rgb(0 0 0 / .2); }
 .measure-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .measure-header strong { font-size:14px; }
+.sheet-header-actions { display:flex; align-items:center; gap:4px; }
+/* Einklappen der Werkzeugleisten wird nur auf schmalen Geräten gebraucht. */
+.sheet-toggle { display:none; width:44px; min-width:44px; height:44px; min-height:44px; border:0; border-radius:10px; background:#eeeae2; color:var(--ink); padding:0; }
+.sheet-toggle svg { width:24px; height:24px; display:block; transition:transform .18s ease; }
+.collapsed .sheet-toggle svg { transform:rotate(180deg); }
 .measure-modes { display:flex; gap:6px; }
 .measure-modes button { flex:1; min-width:0; border:1px solid #ccc7bd; border-radius:9px; background:#eeeae2; color:var(--ink); padding:6px; font-size:13px; font-weight:800; }
 .measure-mode.active { border-color:var(--fire); background:var(--fire); color:white; }
@@ -175,7 +180,44 @@ dialog p { margin:0; line-height:1.45; }
 .forecast-row { display:grid; grid-template-columns:44px 24px 1fr auto; gap:8px; align-items:center; padding:5px 4px; border-top:1px solid var(--line); font-size:13px; }
 .forecast-row.warn { border-radius:6px; background:#f8dddd; color:#8b171a; font-weight:750; }
 .weather-box small { display:block; margin-top:8px; color:#6c716d; font-size:11px; line-height:1.45; }
-@media (min-width:700px) { .topbar { width:min(460px, calc(100% - 20px)); right:auto; } .map-tools { flex-direction:column; } .measure-bar, .sign-bar { bottom:calc(14px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 170px)); } }
+@media (min-width:700px) and (min-height:520px) { .topbar { width:min(460px, calc(100% - 20px)); right:auto; } .map-tools { flex-direction:column; } .measure-bar, .sign-bar { bottom:calc(14px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 170px)); } }
+
+/* Smartphone (hochkant und quer): durchgehende Werkzeugleiste unten und
+   einklappbare Bedienfelder, damit die Karte zum Setzen von Punkten und
+   Zeichen frei bleibt. Die Werkzeugspalte des iPads passt hier nicht mehr. */
+@media (max-width:699px), (max-height:519px) {
+  .brand-mark { width:38px; height:38px; }
+  .brand strong { font-size:14px; }
+  .topbar { min-height:52px; gap:8px; padding:6px 6px 6px 8px; }
+  .icon-button { padding:0 11px; font-size:14px; }
+
+  .map-tools { left:calc(8px + env(safe-area-inset-left)); right:calc(8px + env(safe-area-inset-right)); bottom:calc(8px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:2px; padding:4px; border:1px solid rgb(255 255 255 / .8); border-radius:16px; background:rgb(255 255 255 / .96); box-shadow:0 4px 18px rgb(0 0 0 / .2); }
+  .map-tools button { min-width:0; border:0; border-radius:12px; background:transparent; box-shadow:none; padding:4px 1px; font-size:20px; line-height:1.1; }
+  .map-tools button span { margin-top:1px; font-size:9px; font-weight:800; letter-spacing:-.02em; }
+  .map-tools button[aria-expanded="true"] { background:var(--fire); color:white; }
+
+  .leaflet-top.leaflet-left { bottom:calc(76px + env(safe-area-inset-bottom)); }
+  .leaflet-bottom.leaflet-left { bottom:calc(152px + env(safe-area-inset-bottom)); }
+  .toast { bottom:calc(78px + env(safe-area-inset-bottom)); }
+
+  .measure-bar, .sign-bar { left:0; right:0; width:auto; transform:none; bottom:calc(66px + env(safe-area-inset-bottom)); max-height:56dvh; overflow-y:auto; overscroll-behavior:contain; gap:7px; border-width:1px 0 0; border-radius:16px 16px 0 0; padding:8px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left)); }
+  .sheet-toggle { display:grid; place-items:center; }
+  .measure-bar.collapsed .measure-modes,
+  .sign-bar.collapsed .sign-palette,
+  .sign-bar.collapsed .sign-options { display:none; }
+  .sign-palette { max-height:min(230px, 26dvh); }
+
+  .weather-box { left:calc(10px + env(safe-area-inset-left)); max-height:calc(100dvh - 168px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .weather-current { grid-template-columns:repeat(2, 1fr); }
+}
+
+/* Smartphone quer: sehr wenig Höhe, dafür viel Breite. */
+@media (max-height:519px) {
+  .measure-bar, .sign-bar { max-height:calc(100dvh - 136px); }
+  .sign-palette { max-height:min(150px, 34dvh); }
+  .weather-box { top:calc(66px + env(safe-area-inset-top)); max-height:calc(100dvh - 148px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .weather-current { grid-template-columns:repeat(3, 1fr); }
+}
 @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
 @page { size:A3 landscape; margin:8mm; }
 @media print {
