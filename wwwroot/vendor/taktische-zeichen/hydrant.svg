@@ -1,0 +1,7 @@
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+	<title>Hydrant (Löschwasserentnahmestelle)</title>
+	<rect x="14" y="62" width="228" height="132" rx="18" fill="#003399"/>
+	<path d="M100,80 L100,152 M156,80 L156,152 M100,116 L156,116" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+	<path d="M56,174 q18,-14 36,0 t36,0 t36,0 t36,0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+</svg>

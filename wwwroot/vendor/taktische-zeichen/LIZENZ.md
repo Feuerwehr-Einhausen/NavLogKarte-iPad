@@ -1,7 +1,7 @@
 # Taktische Zeichen
 
-Die Symbole in diesem Verzeichnis stammen – mit Ausnahme von `wasserentnahme.svg` –
-aus dem Projekt „Taktische Zeichen“ von Jonas Köritz:
+Die Symbole in diesem Verzeichnis stammen – mit Ausnahme der unten genannten
+Eigenerstellungen – aus dem Projekt „Taktische Zeichen“ von Jonas Köritz:
 
 - Quelle: https://github.com/jonas-koeritz/Taktische-Zeichen (Release v2.0.0)
 - Lizenz: Creative Commons Attribution 4.0 International (CC BY 4.0),
@@ -13,3 +13,10 @@ aus dem Projekt „Taktische Zeichen“ von Jonas Köritz:
 
 `wasserentnahme.svg`, `ankerpunkt.svg` und `lookout.svg` sind Eigenerstellungen
 dieses Projekts und stehen unter der Projektlizenz (siehe LICENSE im Repositorium).
+
+Ebenfalls Eigenerstellungen dieses Projekts (Projektlizenz) sind die Zeichen der
+Löschwasserversorgung `hydrant.svg`, `loeschbrunnen.svg`, `zisterne.svg` und
+`loeschteich.svg`. Die Bibliothek von Jonas Köritz enthält keine Zeichen der
+Löschwasserversorgung; die Dateien sind daher schlicht im Stil der übrigen
+Symbole gezeichnet (blaues liegendes Grundzeichen der Wasserentnahme mit
+Zusatzkennung) und keine maßstabsgetreue Wiedergabe einer Norm.

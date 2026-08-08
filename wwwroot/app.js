@@ -1,11 +1,11 @@
-const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, weather: { marker: null } };
+const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, ffeh: { active: false, visible: true, openOnly: false, selected: null, editingId: null, editingBackup: null, editingIsNew: false, editingHadLocal: false, group: null, markers: new Map(), repo: [] }, strassen: { visible: false, loading: null, features: [], group: null, timer: null }, weather: { marker: null } };
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.2.3';
-const APP_BUILD = '2026-07-25';
-const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false };
+const APP_VERSION = '1.3.0';
+const APP_BUILD = '2026-08-08';
+const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false };
 const INITIAL_LAYER_PATTERNS = [
   /^dtk0*25(?:\b|\s)/,
   /^waldbrand\s*poi(?:\b|\s)/,
@@ -36,21 +36,33 @@ async function start() {
 }
 
 function wireUi() {
+  // Erklärzeile im Layer-Panel mit exakt den Symbolen der Layerliste füllen.
+  for (const icon of document.querySelectorAll('[data-layer-kind]')) icon.innerHTML = layerIconSvg(icon.dataset.layerKind);
   $('layersButton').addEventListener('click', openPanel);
   $('searchButton').addEventListener('click', toggleSearch);
+  // Mit der Tastatur geöffnet (event.detail === 0) springt der Fokus in das Menü;
+  // beim Tippen bleibt er am Knopf, sonst zöge die Ansicht unerwartet mit.
+  $('menuButton').addEventListener('click', event => { toggleAppMenu(); if (event.detail === 0) $('appMenu').querySelector('.app-menu-item')?.focus(); });
+  $('appMenu').addEventListener('keydown', moveAppMenuFocus);
   $('searchForm').addEventListener('submit', searchMap);
   $('closePanel').addEventListener('click', closePanel);
   $('backdrop').addEventListener('click', closePanel);
   $('homeButton').addEventListener('click', () => state.map.setView([state.config.centerLatitude, state.config.centerLongitude], state.config.zoom));
   $('printButton').addEventListener('click', printMap);
+  $('legendButton').addEventListener('click', toggleLegendOverlay);
+  $('legendClose').addEventListener('click', () => setLegendOverlay(false));
   $('locateButton').addEventListener('click', locate);
   $('fullscreenButton').addEventListener('click', toggleFullscreen);
   $('osmToggle').addEventListener('change', toggleOsm);
   $('allLayersOff').addEventListener('click', turnAllLayersOff);
   $('restoreStartView').addEventListener('click', restoreStartView);
   $('setupForm').addEventListener('submit', saveKid);
-  $('settingsForm').addEventListener('submit', saveSettings);
-  $('resetAccessButton').addEventListener('click', resetAccess);
+  // saveSettings bleibt unverändert; das Schließen hängt nur hinten dran.
+  $('settingsForm').addEventListener('submit', async event => { await saveSettings(event); $('settingsDialog').close(); });
+  $('openSettingsDialog').addEventListener('click', () => { closeAppMenu(); $('settingsDialog').showModal(); });
+  $('closeSettingsDialog').addEventListener('click', () => $('settingsDialog').close());
+  $('settingsDialog').addEventListener('click', event => { if (event.target === $('settingsDialog')) $('settingsDialog').close(); });
+  $('resetAccessButton').addEventListener('click', () => { closeAppMenu(); resetAccess(); });
   $('measureButton').addEventListener('click', toggleMeasure);
   $('measureClose').addEventListener('click', closeMeasure);
   $('measureCollapse').addEventListener('click', () => setSheetCollapsed('measureBar', !$('measureBar').classList.contains('collapsed')));
@@ -61,6 +73,24 @@ function wireUi() {
   for (const button of document.querySelectorAll('.measure-mode')) button.addEventListener('click', () => { setMeasureMode(button.dataset.mode); collapseSheetOnPhone('measureBar'); });
   for (const button of document.querySelectorAll('.radius-preset')) button.addEventListener('click', () => { $('radiusInput').value = button.dataset.radius; updateWorkingMeasure(); });
   $('radiusInput').addEventListener('input', updateWorkingMeasure);
+  $('ffehToggle').addEventListener('change', toggleFfehLayer);
+  $('strassenToggle').addEventListener('change', toggleStrassenLayer);
+  $('ffehButton').addEventListener('click', toggleFfeh);
+  $('ffehClose').addEventListener('click', () => closeFfeh());
+  $('ffehCollapse').addEventListener('click', () => setSheetCollapsed('ffehBar', !$('ffehBar').classList.contains('collapsed')));
+  $('ffehNameInput').addEventListener('input', () => onFfehOptionInput());
+  $('ffehDescriptionInput').addEventListener('input', () => onFfehOptionInput());
+  $('ffehCheckerInput').addEventListener('input', () => onFfehOptionInput());
+  $('ffehAccessSelect').addEventListener('change', () => onFfehOptionInput());
+  $('ffehStatusSelect').addEventListener('change', () => onFfehOptionInput(true));
+  $('ffehSourceSelect').addEventListener('change', () => onFfehOptionInput(false, true));
+  $('ffehOpenOnlyToggle').addEventListener('change', toggleFfehOpenOnly);
+  $('ffehLocateAdd').addEventListener('click', addFfehPointAtLocation);
+  $('ffehFinishEdit').addEventListener('click', finishFfehEditAndClose);
+  $('ffehCancelEdit').addEventListener('click', cancelFfehEditAndClose);
+  $('ffehExport').addEventListener('click', () => { closeAppMenu(); exportFfehPoints(); });
+  $('ffehImport').addEventListener('click', () => { closeAppMenu(); $('ffehImportInput').click(); });
+  $('ffehImportInput').addEventListener('change', event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) importFfehFile(file); });
   $('signsButton').addEventListener('click', toggleSigns);
   $('signClose').addEventListener('click', closeSigns);
   $('signClearAll').addEventListener('click', clearSigns);
@@ -72,6 +102,9 @@ function wireUi() {
   $('closeQrDialog').addEventListener('click', () => $('qrDialog').close());
   $('qrDialog').addEventListener('click', event => { if (event.target === $('qrDialog')) $('qrDialog').close(); });
   document.addEventListener('click', event => {
+    // Tipp neben das Menü schließt es. Der eigene Knopf ist ausgenommen, sonst
+    // würde sein Umschalten hier sofort wieder rückgängig gemacht.
+    if (!$('appMenu').hidden && !event.target.closest?.('#appMenu, #menuButton')) closeAppMenu();
     const button = event.target.closest('.coordinate-qr-button');
     if (button) showQrDialog(Number(button.dataset.lat), Number(button.dataset.lon));
     const deleteButton = event.target.closest('.measure-delete-button');
@@ -82,8 +115,26 @@ function wireUi() {
     if (signDeleteButton) deleteSign(signDeleteButton.dataset.id);
     const signEditButton = event.target.closest('.sign-edit-button');
     if (signEditButton) editSign(signEditButton.dataset.id);
+    const ffehDeleteButton = event.target.closest('.ffeh-delete-button');
+    if (ffehDeleteButton) deleteFfehPoint(ffehDeleteButton.dataset.id);
+    const ffehEditButton = event.target.closest('.ffeh-edit-button');
+    if (ffehEditButton) editFfehPoint(ffehEditButton.dataset.id);
+    const ffehAssessButton = event.target.closest('.ffeh-assess-button');
+    // Alles, was die Bewertung braucht, steht am Knopf selbst: Koordinaten und
+    // Vorbefüllung. Kein Rückgriff auf einen Zwischenspeicher – siehe
+    // ffehAssessHtml.
+    if (ffehAssessButton) startFfehAssessment(Number(ffehAssessButton.dataset.lat), Number(ffehAssessButton.dataset.lon), ffehAssessButton.dataset.seed);
   });
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePanel(); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    // Nach dem Schließen per Escape gehört der Fokus zurück an den Burger-Knopf.
+    const menueOffen = !$('appMenu').hidden;
+    closePanel();
+    closeAppMenu();
+    if (menueOffen) $('menuButton').focus();
+  });
+  // Gemerkter Zustand der Kartenlegende; ohne Eintrag bleibt sie zugeklappt.
+  if (loadLegendOpen()) setLegendOverlay(true);
 }
 
 function initMap(crsCode) {
@@ -95,6 +146,13 @@ function initMap(crsCode) {
   state.map.getPane('navlogBackgroundPane').style.zIndex = '220';
   state.map.createPane('navlogOverlayPane');
   state.map.getPane('navlogOverlayPane').style.zIndex = '420';
+  // Beschriftungen liegen über den NavLog-Overlays, aber unter den FFEH-Punkten
+  // und fangen keine Kartenklicks ab (GetFeatureInfo bleibt unverändert).
+  state.map.createPane('strassenPane');
+  state.map.getPane('strassenPane').style.zIndex = '440';
+  state.map.getPane('strassenPane').style.pointerEvents = 'none';
+  state.map.createPane('ffehPane');
+  state.map.getPane('ffehPane').style.zIndex = '460';
   state.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap-Mitwirkende'
@@ -109,7 +167,11 @@ function initMap(crsCode) {
   L.control.scale({ imperial: false, maxWidth: 140 }).addTo(state.map);
   initMeasure();
   initSigns();
+  initFfeh();
+  initStrassen();
   state.map.on('click', queryMapPoint);
+  // Die eigenen Layer stehen erst jetzt fest – Legende einmal nachziehen.
+  renderLegend();
 }
 
 async function loadCapabilities() {
@@ -175,15 +237,34 @@ function extractFeatureInfoFormat(xml) {
     || 'text/plain';
 }
 
-async function queryMapPoint(event) {
+function queryMapPoint(event) {
+  if (state.ffeh.active) { handleFfehClick(event); return; }
   if (state.signs.active) { handleSignClick(event); return; }
   if (state.measure.active) { handleMeasureClick(event); return; }
+  showFeatureQuery(event);
+}
+
+// Symbolabfrage samt Koordinaten-Popup. Der Erkundungsmodus ruft sie auch bei
+// offenem FFEH-Werkzeug auf – sonst wäre „⌖ Punkt bewerten“ nach der ersten
+// Bewertung nicht mehr erreichbar, weil jeder Kartentipp im Werkzeug endet.
+async function showFeatureQuery(event) {
   const base = coordinatePopup(event.latlng.lat, event.latlng.lng);
+  // Erkundungsmodus: der Knopf steht unter der Symbolinformation und legt aus
+  // jedem Kartenpunkt heraus einen eigenen FFEH-Punkt zur Bewertung an.
+  // Ohne Antwort trägt der Knopf keine Vorbefüllung – der Lade- und der
+  // Fehlerzweig verwenden genau diese Fassung (Quelle bleibt dann „karte“).
+  const assess = ffehAssessHtml(event.latlng.lat, event.latlng.lng);
   const queryableLayers = state.availableLayers.filter(layer => {
     const tile = state.navlogLayers.get(layer.name);
-    return layer.queryable && tile && state.map.hasLayer(tile);
+    // Hintergrundkarten (DTK/DOP) melden sich in den Capabilities zwar als
+    // abfragbar, liefern aber nur die Pixelfarbe unter dem Finger – ein Objekt
+    // ohne jede einsatzrelevante Eigenschaft. Schlimmer noch: dieses leere
+    // Rasterobjekt steht in der Antwort vor dem echten Symbol und hat die
+    // Layerzuordnung des Treffers vergiftet (Name „DTK0025“, Quelle „Karte“).
+    // Deshalb wird die Hintergrundkarte grundsätzlich nicht mit abgefragt.
+    return layer.queryable && !isBackgroundLayer(layer) && tile && state.map.hasLayer(tile);
   });
-  const popup = L.popup({ maxWidth: 420 }).setLatLng(event.latlng).setContent(queryableLayers.length ? `${base}<div class="feature-info muted">Symbolinformation wird geladen …</div>` : base).openOn(state.map);
+  const popup = L.popup({ maxWidth: 420 }).setLatLng(event.latlng).setContent(queryableLayers.length ? `${base}<div class="feature-info muted">Symbolinformation wird geladen …</div>${assess}` : `${base}${assess}`).openOn(state.map);
   if (!queryableLayers.length) return;
 
   try {
@@ -199,21 +280,39 @@ async function queryMapPoint(event) {
       BBOX: [northWest.x, southEast.y, southEast.x, northWest.y].join(','),
       WIDTH: String(size.x), HEIGHT: String(size.y),
       X: String(Math.round(point.x)), Y: String(Math.round(point.y)),
-      SRS: state.mapCrs, INFO_FORMAT: state.featureInfoFormat, FEATURE_COUNT: '10'
+      SRS: state.mapCrs, INFO_FORMAT: state.featureInfoFormat, FEATURE_COUNT: '10',
+      // Toleranzparameter für gängige WMS-Server; unbekannte Parameter werden
+      // ignoriert. Ohne Toleranz wertet ein Server nur wenige Pixel um X/Y aus –
+      // ein Symbol muss dann pixelgenau getroffen werden, sonst kommt „kein
+      // abfragbares Symbol“ zurück. Welche Software hinter gdw.navlog.de läuft,
+      // ist uns nicht bekannt (kein Testzugang), deshalb alle drei Schreibweisen:
+      // BUFFER (GeoServer), RADIUS (MapServer), FI_*_TOLERANCE (QGIS Server).
+      BUFFER: '16', RADIUS: '16',
+      FI_POINT_TOLERANCE: '24', FI_LINE_TOLERANCE: '12', FI_POLYGON_TOLERANCE: '8'
     });
     const response = await fetch(navlogUrl(Object.fromEntries(params)));
     if (!response.ok) throw new Error(`NavLog antwortet mit Status ${response.status}`);
     const info = await formatFeatureInfo(response, queryableLayers);
-    if (state.map.hasLayer(popup)) popup.setContent(`${base}${info}`);
+    // Der Bewerten-Knopf wird gemeinsam mit der Antwort neu gebaut und trägt
+    // die Vorbefüllung als eigenes Datenattribut. Damit gehört jeder Knopf
+    // genau zu der Abfrage, aus der er entstanden ist – auch wenn inzwischen
+    // ein anderes Popup offen war oder Antworten in anderer Reihenfolge
+    // eintreffen.
+    if (state.map.hasLayer(popup)) popup.setContent(`${base}${info.html}${ffehAssessHtml(event.latlng.lat, event.latlng.lng, info.seed)}`);
   } catch (error) {
-    if (state.map.hasLayer(popup)) popup.setContent(`${base}<div class="feature-info muted">Für diesen Punkt konnte keine Symbolinformation abgerufen werden.</div>`);
+    if (state.map.hasLayer(popup)) popup.setContent(`${base}<div class="feature-info muted">Für diesen Punkt konnte keine Symbolinformation abgerufen werden.</div>${assess}`);
   }
 }
 
+// Liefert die Anzeige und – falls die Abfrage wirklich etwas gefunden hat –
+// den Seed für „⌖ Punkt bewerten“. Der Seed ist ein reines Datenobjekt und
+// wird vom Aufrufer an den Knopf gehängt; er wird nirgends zwischengespeichert.
+// Rückgabe: { html, seed } mit seed === null, wenn nichts Zählbares zu sehen ist.
 async function formatFeatureInfo(response, layers) {
+  const ohneTreffer = html => ({ html, seed: null });
   const contentType = response.headers.get('content-type') || state.featureInfoFormat;
   const text = await response.text();
-  if (!text.trim()) return '<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>';
+  if (!text.trim()) return ohneTreffer('<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>');
 
   if (contentType.includes('json')) {
     try {
@@ -230,24 +329,37 @@ async function formatFeatureInfo(response, layers) {
         seenFeatures.add(signature);
         return true;
       });
-      if (!features.length) return '<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>';
+      if (!features.length) return ohneTreffer('<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>');
       const rescuePoints = features.filter(feature => {
         const properties = feature.properties || feature;
         return properties.rp_nr != null || properties.RP_NR != null;
       });
       const displayedFeatures = rescuePoints.length ? rescuePoints.slice(0, 1) : features.slice(0, 4);
-      const blocks = displayedFeatures.map((feature, index) => {
+      // Vorbefüllt wird aus dem Treffer, der auch wirklich etwas anzeigt.
+      // Objekte ohne darstellbare Eigenschaft (z. B. Rasterpixel) dürfen den
+      // sichtbaren Treffer nicht verdrängen.
+      const treffer = displayedFeatures.find(feature => hasFeatureContent(feature.properties || feature)) || displayedFeatures[0];
+      const blocks = displayedFeatures.map(feature => {
         const properties = feature.properties || feature;
         const entries = friendlyProperties(properties);
         const isRescuePoint = properties.rp_nr != null || properties.RP_NR != null;
         if (!entries.length && !isRescuePoint) return '';
-        const title = featureTitle(properties, layers[index] || layers[0]);
+        // Der Titel muss aus demselben Layer stammen wie die Vorbefüllung –
+        // die Position in der Antwort sagt nichts über den Layer aus.
+        const title = featureTitle(properties, featureLayer(feature, layers));
         const rows = title === 'Einsatzhinweis' && entries.length === 1 && entries[0].label === 'Hinweis'
           ? `<div class="feature-note">${escapeHtml(entries[0].value)}</div>`
           : entries.map(entry => `<div class="feature-row${entry.important ? ' important' : ''}"><span>${escapeHtml(entry.label)}</span><strong>${escapeHtml(entry.value)}</strong></div>`).join('');
         return `<section class="feature-card"><h4>${escapeHtml(title)}</h4>${rows}</section>`;
       }).filter(Boolean).join('');
-      return blocks ? `<div class="feature-info"><strong>Information zum Symbol</strong>${blocks}</div>` : '<div class="feature-info muted">Für dieses Symbol liegen keine einsatzrelevanten Zusatzinformationen vor.</div>';
+      // Sobald mindestens eine Karte erscheint, steht unter dem Finger ein
+      // echtes NavLog-Objekt – Hintergrundlayer sind von der Abfrage
+      // ausgeschlossen, alles Übrige ist per Definition NavLog-Inhalt.
+      if (!blocks) return ohneTreffer('<div class="feature-info muted">Für dieses Symbol liegen keine einsatzrelevanten Zusatzinformationen vor.</div>');
+      return {
+        html: `<div class="feature-info"><strong>Information zum Symbol</strong>${blocks}</div>`,
+        seed: buildFfehSeed(treffer ? (treffer.properties || treffer) : null, featureLayer(treffer, layers))
+      };
     } catch { }
   }
 
@@ -255,8 +367,12 @@ async function formatFeatureInfo(response, layers) {
   const parsed = new DOMParser().parseFromString(text, documentType);
   const cleanText = (parsed.body?.textContent || parsed.documentElement?.textContent || text).replace(/\s+/g, ' ').trim();
   const serviceMessage = /no features|no results|keine objekte|kein objekt/i.test(cleanText);
-  if (!cleanText || serviceMessage) return '<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>';
-  return `<div class="feature-info"><strong>Symbolinformation</strong><p>${escapeHtml(cleanText.slice(0, 1800))}</p><small>Aktive Abfrage: ${escapeHtml(layers.map(layer => layer.title || layer.name).join(', '))}</small></div>`;
+  if (!cleanText || serviceMessage) return ohneTreffer('<div class="feature-info muted">An dieser Stelle wurde kein abfragbares Symbol gefunden.</div>');
+  // Auch im Text-/HTML-Zweig gilt: angezeigter Inhalt heißt Treffer.
+  return {
+    html: `<div class="feature-info"><strong>Symbolinformation</strong><p>${escapeHtml(cleanText.slice(0, 1800))}</p><small>Aktive Abfrage: ${escapeHtml(layers.map(layer => layer.title || layer.name).join(', '))}</small></div>`,
+    seed: buildFfehSeed(null, featureLayer(null, layers))
+  };
 }
 
 function friendlyProperties(properties) {
@@ -318,6 +434,28 @@ function friendlyProperties(properties) {
   return entries.sort((a, b) => a.priority - b.priority).slice(0, 10);
 }
 
+// Trägt das Objekt überhaupt etwas Anzeigbares? Rasterpixel der Hintergrund-
+// karte bestehen nur aus ausgeblendeten Farbbändern und sind damit leer.
+function hasFeatureContent(properties) {
+  return properties.rp_nr != null || properties.RP_NR != null || friendlyProperties(properties).length > 0;
+}
+
+// Die Antwort benennt den Treffer meist als „layername.id“. Damit lässt sich
+// der Layer bestimmen, aus dem er wirklich stammt – wichtig für die Frage, ob
+// unter dem Finger ein NavLog-Symbol oder nur ein Weg liegt.
+function featureLayer(feature, layers) {
+  // Nur ein abfragbarer Layer aktiv: die Zuordnung ist ohnehin eindeutig.
+  if (layers.length <= 1) return layers[0];
+  const id = String(feature?.id ?? '');
+  const treffer = layers.find(layer => id === layer.name || id.startsWith(`${layer.name}.`));
+  if (treffer) return treffer;
+  // Ohne verwertbare id raten wir: Wer ein Symbol antippt, trifft weit
+  // wahrscheinlicher einen Punkt-Layer als einen Wege- oder Flächenlayer.
+  // Der frühere Rückfall auf layers[0] hat den Treffer dem erstbesten Layer
+  // zugeschlagen und damit Quelle und Name verfälscht.
+  return layers.find(layer => layerKind(layer) === 'points') || layers[0];
+}
+
 function featureTitle(properties, layer) {
   const rescuePointNumber = properties.rp_nr ?? properties.RP_NR;
   if (rescuePointNumber != null) return `Rettungspunkt ${rescuePointNumber}`;
@@ -328,8 +466,7 @@ function featureTitle(properties, layer) {
     '6': 'Schranke', '7': 'Platz', '8': 'Verkehrszeichen', '9': 'Verbindungsobjekt'
   };
   const typeName = objectTypes[String(properties.typ).replace(/\.0$/, '')];
-  const descriptive = [properties.bezeichnung, properties.name, properties.objektart].find(value => value && !/^\d+(?:\.0)?$/.test(String(value)));
-  return descriptive || typeName || layer?.title || layer?.name || 'Kartenobjekt';
+  return descriptiveName(properties) || typeName || layer?.title || layer?.name || 'Kartenobjekt';
 }
 
 function renderLayers() {
@@ -439,18 +576,62 @@ function restoreStartView() {
   }
   $('osmToggle').checked = state.config.showOpenStreetMap && !$('osmToggle').disabled;
   toggleOsm();
+  $('ffehToggle').checked = state.config.showFfehLayer !== false;
+  toggleFfehLayer();
+  $('strassenToggle').checked = state.config.showStrassenLayer === true;
+  toggleStrassenLayer();
   state.map.setView([state.config.centerLatitude, state.config.centerLongitude], state.config.zoom);
   renderLegend();
   toast('Gespeicherte Startansicht wiederhergestellt.');
 }
+
+// Zwei Ziele mit demselben Inhalt: das Overlay auf der Karte und die Drucklegende.
+const LEGEND_TARGETS = ['legendOverlayList', 'printLegendList'];
 
 function renderLegend() {
   const active = state.availableLayers.filter(layer => {
     const tile = state.navlogLayers.get(layer.name);
     return tile && state.map.hasLayer(tile);
   });
-  buildLegend($('legendList'), active, 'Noch kein Layer aktiviert.');
+  const ownLayers = state.ffeh.visible || state.strassen.visible;
+  buildLegend($('legendOverlayList'), active, ownLayers ? 'Kein NavLog-Layer aktiviert.' : 'Noch kein Layer aktiviert.');
   buildLegend($('printLegendList'), active, 'Keine NavLog-Layer aktiviert.');
+  // Die eigenen Layer kommen nicht vom WMS und brauchen eine feste Legende.
+  if (state.strassen.visible) for (const id of LEGEND_TARGETS) $(id).prepend(strassenLegendItem());
+  if (state.ffeh.visible) for (const id of LEGEND_TARGETS) $(id).prepend(ffehLegendItem());
+}
+
+// ── Legende als Kartenüberlagerung ────────────────────────────────────────
+// Im Layer-Panel war die Legende beim Arbeiten in der Karte nicht sichtbar.
+// Sie liegt deshalb als ein-/ausklappbares Panel über der Karte; ihr Zustand
+// bleibt auf dem Gerät gemerkt (Standard: zugeklappt).
+const LEGEND_STORAGE = 'navlog-ipad-legend';
+
+function loadLegendOpen() {
+  try { return localStorage.getItem(LEGEND_STORAGE) === 'offen'; }
+  catch { return false; }
+}
+
+function toggleLegendOverlay() { setLegendOverlay($('legendOverlay').hidden); }
+
+// „merken“ ist falsch, wenn nicht der Nutzer, sondern ein anderes Bedienfeld die
+// Legende zur Seite schiebt: das Öffnen eines Werkzeugs darf die gemerkte
+// Entscheidung nicht überschreiben.
+function setLegendOverlay(open, merken = true) {
+  const overlay = $('legendOverlay');
+  const geaendert = overlay.hidden === open;
+  overlay.hidden = !open;
+  // Auf dem Smartphone liegt die Legende über der linken Bedienspalte (CSS).
+  document.body.classList.toggle('legend-open', open);
+  $('legendButton').setAttribute('aria-expanded', String(open));
+  $('legendButton').setAttribute('aria-label', open ? 'Legende ausblenden' : 'Legende anzeigen');
+  // Der zuletzt gewählte Zustand gilt auch nach einem Neustart der App.
+  if (geaendert && merken) { try { localStorage.setItem(LEGEND_STORAGE, open ? 'offen' : 'zu'); } catch { } }
+  if (!open) return;
+  // Suchfeld und Legende teilen sich den Platz links oben.
+  $('searchBox').hidden = true;
+  $('searchButton').setAttribute('aria-expanded', 'false');
+  renderLegend();
 }
 
 function buildLegend(list, active, emptyText) {
@@ -482,8 +663,35 @@ function buildLegend(list, active, emptyText) {
   }
 }
 
-function openPanel() { $('panel').classList.add('open'); $('panel').setAttribute('aria-hidden', 'false'); $('layersButton').setAttribute('aria-expanded', 'true'); $('backdrop').hidden = false; }
-function closePanel() { $('panel').classList.remove('open'); $('panel').setAttribute('aria-hidden', 'true'); $('layersButton').setAttribute('aria-expanded', 'false'); $('backdrop').hidden = true; }
+function openPanel() { closeAppMenu(); $('panel').classList.add('open'); $('panel').setAttribute('aria-hidden', 'false'); $('layersButton').setAttribute('aria-expanded', 'true'); $('backdrop').hidden = false; }
+function closePanel() { closeAppMenu(); $('panel').classList.remove('open'); $('panel').setAttribute('aria-hidden', 'true'); $('layersButton').setAttribute('aria-expanded', 'false'); $('backdrop').hidden = true; }
+
+// ── Verwaltungsmenü (⋮ im Panel-Kopf) ─────────────────────────────────────
+// Bewusst ohne gemerkten Zustand: Das Menü startet immer zu.
+function toggleAppMenu() { $('appMenu').hidden ? openAppMenu() : closeAppMenu(); }
+
+function openAppMenu() {
+  $('appMenu').hidden = false;
+  $('menuButton').setAttribute('aria-expanded', 'true');
+}
+
+function closeAppMenu() {
+  $('appMenu').hidden = true;
+  $('menuButton').setAttribute('aria-expanded', 'false');
+}
+
+// Pfeiltasten führen durch das Menü, wie es role="menu" erwarten lässt.
+function moveAppMenuFocus(event) {
+  const richtung = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+  if (!richtung && event.key !== 'Home' && event.key !== 'End') return;
+  const eintraege = [...$('appMenu').querySelectorAll('.app-menu-item')];
+  if (!eintraege.length) return;
+  event.preventDefault();
+  if (event.key === 'Home') return eintraege[0].focus();
+  if (event.key === 'End') return eintraege[eintraege.length - 1].focus();
+  const index = eintraege.indexOf(document.activeElement);
+  eintraege[(index + richtung + eintraege.length) % eintraege.length].focus();
+}
 function toggleOsm() {
   if ($('osmToggle').checked) {
     for (const layer of state.availableLayers.filter(isBackgroundLayer)) {
@@ -502,6 +710,7 @@ function toggleOsm() {
 
 function printMap() {
   closePanel();
+  closeAppMenu();
   $('searchBox').hidden = true;
   $('searchButton').setAttribute('aria-expanded', 'false');
   renderLegend();
@@ -513,7 +722,8 @@ function toggleSearch() {
   const box = $('searchBox');
   box.hidden = !box.hidden;
   $('searchButton').setAttribute('aria-expanded', String(!box.hidden));
-  if (!box.hidden) $('searchInput').focus();
+  // Suchfeld und Legende belegen denselben Platz links oben.
+  if (!box.hidden) { closeAppMenu(); setLegendOverlay(false, false); $('searchInput').focus(); }
 }
 
 async function searchMap(event) {
@@ -676,7 +886,9 @@ async function saveSettings(event) {
     centerLongitude: center.lng,
     zoom: state.map.getZoom(),
     defaultLayers: enabled,
-    showOpenStreetMap: $('osmToggle').checked
+    showOpenStreetMap: $('osmToggle').checked,
+    showFfehLayer: $('ffehToggle').checked,
+    showStrassenLayer: $('strassenToggle').checked
   };
   try {
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(next));
@@ -695,6 +907,8 @@ function applyConfigToUi() {
   $('settingLon').value = Number(state.config.centerLongitude).toFixed(6);
   $('settingZoom').value = state.config.zoom;
   $('osmToggle').checked = state.config.showOpenStreetMap;
+  $('ffehToggle').checked = state.config.showFfehLayer !== false;
+  $('strassenToggle').checked = state.config.showStrassenLayer === true;
   $('appVersion').textContent = `v${APP_VERSION} · Stand ${APP_BUILD}`;
 }
 
@@ -770,6 +984,10 @@ function drawSavedMeasurement(item) {
 }
 
 function onSavedShapeClick(item, event) {
+  // Ein anderes aktives Werkzeug behält Vorrang, damit über gespeicherte
+  // Messungen hinweg weitergearbeitet werden kann.
+  if (state.ffeh.active) { handleFfehClick(event); return; }
+  if (state.signs.active) { handleSignClick(event); return; }
   if (state.measure.active) { handleMeasureClick(event); return; }
   const description = measurementDescription(item);
   L.popup().setLatLng(event.latlng).setContent(
@@ -818,7 +1036,8 @@ function deleteMeasurement(id) {
 // Nach der Auswahl klappen sie auf Kopfzeile plus Aktionen zusammen.
 const TOOL_SHEETS = {
   measureBar: { toggle: 'measureCollapse', name: 'Messwerkzeuge' },
-  signBar: { toggle: 'signCollapse', name: 'Taktische Zeichen' }
+  signBar: { toggle: 'signCollapse', name: 'Taktische Zeichen' },
+  ffehBar: { toggle: 'ffehCollapse', name: 'FFEH-Punkte' }
 };
 
 function isPhoneLayout() { return window.matchMedia('(max-width:699px), (max-height:519px)').matches; }
@@ -839,11 +1058,15 @@ function collapseSheetOnPhone(sheetId) {
 function toggleMeasure() {
   if ($('measureBar').hidden) {
     if (state.signs.active) closeSigns();
+    if (state.ffeh.active) closeFfeh();
+    // Die Legende würde das Werkzeug-Sheet überlagern und tritt zurück.
+    setLegendOverlay(false, false);
     setSheetCollapsed('measureBar', false);
     $('measureBar').hidden = false;
     state.measure.active = true;
     $('measureButton').setAttribute('aria-expanded', 'true');
     closePanel();
+    closeAppMenu();
     $('searchBox').hidden = true;
     $('searchButton').setAttribute('aria-expanded', 'false');
     state.map.getContainer().classList.add('measuring');
@@ -1081,11 +1304,14 @@ function toggleSigns() { $('signBar').hidden ? openSigns() : closeSigns(); }
 
 function openSigns() {
   if (state.measure.active) closeMeasure();
+  if (state.ffeh.active) closeFfeh();
+  setLegendOverlay(false, false);
   setSheetCollapsed('signBar', false);
   $('signBar').hidden = false;
   state.signs.active = true;
   $('signsButton').setAttribute('aria-expanded', 'true');
   closePanel();
+  closeAppMenu();
   $('searchBox').hidden = true;
   $('searchButton').setAttribute('aria-expanded', 'false');
   state.map.getContainer().classList.add('measuring');
@@ -1156,6 +1382,10 @@ function signIcon(item) {
 }
 
 function onSignMarkerClick(id, event) {
+  // Ein anderes aktives Werkzeug behält Vorrang, damit über Zeichen hinweg
+  // weitergearbeitet werden kann.
+  if (state.ffeh.active) { handleFfehClick(event); return; }
+  if (state.measure.active) { handleMeasureClick(event); return; }
   const item = loadSigns().find(entry => entry.id === id);
   if (!item) return;
   const sign = SIGN_INDEX.get(item.key);
@@ -1253,6 +1483,1160 @@ async function clearSigns() {
 
 function setSignHint(text) { $('signHint').textContent = text; }
 
+// ── Eigene FFEH-Punkte (Waldbrand POI der Feuerwehr Einhausen) ─────────────
+// Repo-Bestand (data/waldbrand-poi-ffeh.geojson) plus lokales Overlay im
+// localStorage: gleiche id überschreibt, Tombstones blenden aus.
+const FFEH_STORAGE = 'navlog-ipad-ffeh';
+// Der Prüfername wird einmal eingegeben und für die nächsten Bewertungen gemerkt.
+const FFEH_CHECKER_STORAGE = 'navlog-ipad-pruefer';
+const FFEH_DATA_URL = 'data/waldbrand-poi-ffeh.geojson';
+// „kurz“ ist die sichtbare Beschriftung der Kachel, „name“ bleibt der volle Titel.
+const FFEH_CATEGORIES = [
+  { key: 'wasserentnahme', name: 'Wasserentnahmestelle', kurz: 'Wasserentn.', svg: 'wasserentnahme.svg' },
+  { key: 'hydrant', name: 'Hydrant', kurz: 'Hydrant', svg: 'hydrant.svg' },
+  { key: 'brunnen', name: 'Brunnen', kurz: 'Brunnen', svg: 'loeschbrunnen.svg' },
+  { key: 'zisterne', name: 'Zisterne', kurz: 'Zisterne', svg: 'zisterne.svg' },
+  { key: 'loeschteich', name: 'Löschteich', kurz: 'Löschteich', svg: 'loeschteich.svg' },
+  { key: 'schranke', name: 'Schranke', kurz: 'Schranke', text: 'SR' },
+  { key: 'gefahrenstelle', name: 'Gefahrenstelle', kurz: 'Gefahr', svg: 'gefahr.svg' },
+  { key: 'treffpunkt', name: 'Treffpunkt', kurz: 'Treffpunkt', text: 'TP' },
+  { key: 'sonstiges', name: 'Sonstiges', kurz: 'Sonstiges', text: '?' }
+];
+const FFEH_INDEX = new Map(FFEH_CATEGORIES.map(category => [category.key, category]));
+const FFEH_STATUS = [
+  { key: 'offen', name: 'Offen (noch nicht geprüft)', color: '#8a8f8a' },
+  { key: 'brauchbar', name: 'Brauchbar', color: '#2f7d32' },
+  { key: 'eingeschraenkt', name: 'Eingeschränkt brauchbar', color: '#c08a00' },
+  { key: 'unbrauchbar', name: 'Unbrauchbar', color: '#9f1d20' },
+  { key: 'nicht_auffindbar', name: 'Nicht auffindbar', color: '#4a4f4b' }
+];
+const FFEH_STATUS_INDEX = new Map(FFEH_STATUS.map(status => [status.key, status]));
+// Die Quelle sagt, worauf die Bewertung beruht – nicht, dass NavLog-Daten
+// übernommen wurden. „navlog“ heißt: An dieser Stelle steht ein NavLog-Symbol,
+// das wir bewertet haben; die Karte legt dafür nur einen Statusring darum.
+const FFEH_SOURCES = [
+  { key: 'navlog', name: 'NavLog-Symbol (bewertet)' },
+  { key: 'karte', name: 'In der Karte erfasst' },
+  { key: 'vor_ort', name: 'Vor Ort erkundet' }
+];
+const FFEH_SOURCE_INDEX = new Map(FFEH_SOURCES.map(source => [source.key, source]));
+
+function initFfeh() {
+  state.ffeh.group = L.layerGroup();
+  state.ffeh.visible = state.config.showFfehLayer !== false;
+  $('ffehToggle').checked = state.ffeh.visible;
+  if (state.ffeh.visible) state.ffeh.group.addTo(state.map);
+  renderFfehPalette();
+  renderFfehStatusOptions();
+  renderFfehSourceOptions();
+  renderFfehLayer();
+  state.map.on('zoomend', updateFfehZoom);
+  updateFfehZoom();
+  loadFfehRepo().then(renderFfehLayer);
+}
+
+async function loadFfehRepo() {
+  try {
+    const response = await fetch(FFEH_DATA_URL);
+    if (!response.ok) throw new Error(`Status ${response.status}`);
+    const data = await response.json();
+    state.ffeh.repo = (Array.isArray(data?.features) ? data.features : []).map(featureToFfehPoint).filter(Boolean);
+  } catch { state.ffeh.repo = []; }
+}
+
+function renderFfehPalette() {
+  const palette = $('ffehPalette');
+  palette.replaceChildren();
+  for (const category of FFEH_CATEGORIES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ffeh-symbol-button';
+    button.dataset.category = category.key;
+    button.title = category.name;
+    button.setAttribute('aria-label', category.name);
+    // Symbol plus Klartext: die Kürzel allein sind im Einsatz nicht selbsterklärend.
+    button.innerHTML = `${ffehSymbolHtml(category)}<span class="ffeh-symbol-name">${escapeHtml(category.kurz || category.name)}</span>`;
+    // Während einer Bearbeitung bleibt das Sheet offen, sonst verschwinden „Fertig“ und „Abbrechen“.
+    button.addEventListener('click', () => { selectFfehCategory(category.key); if (!state.ffeh.editingId) collapseSheetOnPhone('ffehBar'); });
+    palette.append(button);
+  }
+}
+
+function renderFfehStatusOptions() {
+  const select = $('ffehStatusSelect');
+  select.replaceChildren();
+  for (const status of FFEH_STATUS) {
+    const option = document.createElement('option');
+    option.value = status.key;
+    option.textContent = status.name;
+    select.append(option);
+  }
+}
+
+// Die Quelle ist korrigierbar: eine falsch geratene Herkunft darf nicht
+// dauerhaft in den Daten und in der Markerdarstellung stehen bleiben.
+function renderFfehSourceOptions() {
+  const select = $('ffehSourceSelect');
+  select.replaceChildren();
+  for (const source of FFEH_SOURCES) {
+    const option = document.createElement('option');
+    option.value = source.key;
+    option.textContent = source.name;
+    select.append(option);
+  }
+}
+
+function ffehSymbolHtml(category) {
+  return category.svg
+    ? `<img src="${SIGN_BASE}${category.svg}" alt="">`
+    : `<span class="ffeh-symbol-text">${escapeHtml(category.text)}</span>`;
+}
+
+function ffehCategory(key) { return FFEH_INDEX.get(key) || FFEH_INDEX.get('sonstiges'); }
+function ffehStatus(key) { return FFEH_STATUS_INDEX.get(key) || FFEH_STATUS[0]; }
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+
+// ── Datenhaltung: Repo-Bestand + lokales Overlay ───────────────────────────
+function loadFfehLocal() {
+  try {
+    const items = JSON.parse(localStorage.getItem(FFEH_STORAGE) || '[]');
+    return Array.isArray(items) ? items.map(migrateFfehItem) : [];
+  } catch { return []; }
+}
+
+// Altbestand: Das Feld hieß früher „erreichbar_tlf“. Beim Lesen wird es auf
+// „erreichbar_lf“ gezogen, damit alte Geräte- und Dateistände nicht brechen.
+function migrateFfehItem(item) {
+  if (!item || typeof item !== 'object' || !('erreichbar_tlf' in item)) return item;
+  const { erreichbar_tlf, ...rest } = item;
+  if (rest.erreichbar_lf === undefined) rest.erreichbar_lf = typeof erreichbar_tlf === 'boolean' ? erreichbar_tlf : null;
+  return rest;
+}
+
+function saveFfehLocal(items) {
+  try { localStorage.setItem(FFEH_STORAGE, JSON.stringify(items)); } catch { }
+}
+
+function ffehTombstones() { return loadFfehLocal().filter(item => item?.geloescht && item.id); }
+
+function mergedFfehPoints() {
+  const merged = new Map();
+  for (const point of state.ffeh.repo) merged.set(point.id, { ...point, offiziell: true });
+  for (const local of loadFfehLocal()) {
+    if (!local?.id) continue;
+    if (local.geloescht) merged.delete(local.id);
+    else merged.set(local.id, { ...local, offiziell: false });
+  }
+  return [...merged.values()];
+}
+
+function findFfehPoint(id) { return mergedFfehPoints().find(point => point.id === id) || null; }
+
+// Zentraler Einstieg zum Anlegen und Ändern: schreibt immer ins lokale Overlay.
+function upsertFfehPoint(point) {
+  if (!point?.id) return null;
+  const items = loadFfehLocal().filter(item => item.id !== point.id);
+  const { offiziell, ...stored } = point;
+  items.push(stored);
+  saveFfehLocal(items);
+  refreshFfehPoint(stored.id);
+  return stored;
+}
+
+function refreshFfehPoint(id) {
+  const marker = state.ffeh.markers.get(id);
+  const point = findFfehPoint(id);
+  // Bei aktivem Filter kann eine Statusentscheidung den Punkt aus der Arbeitsliste nehmen.
+  if (!marker || !point || !istFfehSichtbar(point)) { renderFfehLayer(); return; }
+  marker.setLatLng([point.lat, point.lng]);
+  marker.setIcon(ffehIcon(point));
+  // setIcon erzeugt das Marker-Element neu, die Hervorhebung muss danach zurück.
+  highlightFfehMarker(state.ffeh.editingId);
+  updateFfehProgress();
+}
+
+function updateFfehPoint(id, changes) {
+  const current = findFfehPoint(id);
+  if (!current) return null;
+  return upsertFfehPoint({ ...current, ...changes });
+}
+
+function renderFfehLayer() {
+  if (!state.ffeh.group) return;
+  state.ffeh.group.clearLayers();
+  state.ffeh.markers.clear();
+  for (const point of visibleFfehPoints()) drawFfehPoint(point);
+  highlightFfehMarker(state.ffeh.editingId);
+  updateFfehProgress();
+}
+
+// Der gerade bearbeitete Punkt wird auf der Karte hervorgehoben, damit klar ist,
+// welchen Marker man ziehen kann.
+function highlightFfehMarker(id) {
+  for (const [key, marker] of state.ffeh.markers) marker.getElement()?.classList.toggle('editing', Boolean(id) && key === id);
+}
+
+// Arbeitsliste: der Filter „Nur offene zeigen“ wirkt nur zur Laufzeit. Der gerade
+// bearbeitete Punkt bleibt immer sichtbar – sonst verschwindet der Marker mit der
+// Statusentscheidung mitten in der Bearbeitung und lässt sich nicht mehr ziehen.
+function istFfehSichtbar(point) {
+  return !state.ffeh.openOnly || ffehStatus(point.status).key === 'offen' || point.id === state.ffeh.editingId;
+}
+
+function visibleFfehPoints() {
+  return mergedFfehPoints().filter(istFfehSichtbar);
+}
+
+function toggleFfehOpenOnly() {
+  state.ffeh.openOnly = $('ffehOpenOnlyToggle').checked;
+  renderFfehLayer();
+  setFfehHint(state.ffeh.openOnly ? 'Filter aktiv: Es werden nur noch offene Punkte angezeigt.' : 'Filter aus: Alle Punkte werden wieder angezeigt.');
+}
+
+// Fortschritt zählt immer über den gesamten Bestand, unabhängig vom Filter.
+function updateFfehProgress() {
+  const points = mergedFfehPoints();
+  const assessed = points.filter(point => ffehStatus(point.status).key !== 'offen').length;
+  $('ffehProgress').textContent = points.length
+    ? `${assessed} von ${points.length} Punkten bewertet`
+    : 'Noch keine Punkte erfasst.';
+}
+
+function drawFfehPoint(point) {
+  const marker = L.marker([point.lat, point.lng], { icon: ffehIcon(point), draggable: true, bubblingMouseEvents: false, pane: 'ffehPane' });
+  marker.on('click', event => onFfehMarkerClick(point.id, event));
+  marker.on('dragend', () => {
+    const position = marker.getLatLng();
+    updateFfehPoint(point.id, { lat: position.lat, lng: position.lng });
+  });
+  marker.addTo(state.ffeh.group);
+  if (!state.ffeh.active) marker.dragging?.disable();
+  state.ffeh.markers.set(point.id, marker);
+}
+
+// Verschieben ist nur im Werkzeugmodus erlaubt; ausgeblendete Marker haben
+// noch keinen Drag-Handler, deshalb überall optional.
+function setFfehDragging(enabled) {
+  for (const marker of state.ffeh.markers.values()) {
+    if (enabled) marker.dragging?.enable();
+    else marker.dragging?.disable();
+  }
+}
+
+// Offen = gestrichelter Ring (noch nichts entschieden), nicht auffindbar =
+// durchgestrichener Ring, sonst durchgezogen in der Statusfarbe.
+function ffehRingClass(status) {
+  if (status.key === 'offen') return ' ffeh-ring-open';
+  if (status.key === 'nicht_auffindbar') return ' ffeh-ring-missing';
+  return '';
+}
+
+function ffehIcon(point) {
+  const status = ffehStatus(point.status);
+  const label = point.name ? `<span class="ffeh-marker-label">${escapeHtml(point.name)}</span>` : '';
+  // Punkte aus NavLog sitzen auf einem eigenen Rastersymbol der Karte. Ein
+  // volles Kategoriesymbol würde es verdecken, deshalb liegt hier nur ein
+  // zentrierter Statusring darum – die Mitte bleibt frei, das Original lesbar.
+  // 52 px außen: groß genug, um das Rastersymbol wirklich zu umfassen, und mit
+  // dem Finger sicher zu treffen (Maße identisch in .ffeh-ring in app.css).
+  if (point.quelle === 'navlog') {
+    // Unter dem Ring steht als Hinweis die Beschreibung (gekürzt), damit die
+    // Erkundungsinfo direkt am Symbol lesbar ist.
+    const hintText = point.beschreibung ? (point.beschreibung.length > 80 ? `${point.beschreibung.slice(0, 79)}…` : point.beschreibung) : '';
+    const hint = hintText ? `<span class="ffeh-marker-label ffeh-marker-hint">${escapeHtml(hintText)}</span>` : '';
+    const ringLabel = label || hint ? `<span class="ffeh-ring-caption">${label}${hint}</span>` : '';
+    return L.divIcon({
+      className: 'ffeh-marker', iconSize: [52, 52], iconAnchor: [26, 26],
+      html: `<span class="ffeh-ring${ffehRingClass(status)}" style="--ffeh-status:${status.color}"></span>${ringLabel}`
+    });
+  }
+  const category = ffehCategory(point.kategorie);
+  const missing = point.status === 'nicht_auffindbar' ? ' missing' : '';
+  return L.divIcon({
+    className: 'ffeh-marker', iconSize: [44, 44], iconAnchor: [22, 22],
+    html: `<span class="ffeh-symbol${missing}" style="--ffeh-status:${status.color}">${ffehSymbolHtml(category)}</span>${label}`
+  });
+}
+
+// ── Zoomabhängige Darstellung ─────────────────────────────────────────────
+// In Übersichtsstufen sind 44-px-Marker viel zu präsent. Gesteuert wird das
+// über eine Klasse am Kartencontainer und reine CSS-Transforms; die Icons
+// selbst werden nie neu aufgebaut (sonst ruckelt jedes Zoomen auf dem iPad).
+const FFEH_ZOOM_CLASSES = ['ffeh-zoom-hidden', 'ffeh-zoom-s', 'ffeh-zoom-m', 'ffeh-zoom-l', 'ffeh-zoom-xl', 'ffeh-zoom-xxl'];
+const FFEH_ZOOM_HINT = 'Übersichtsmaßstab: Die Punkte werden nur klein angezeigt. Zum Bewerten bitte näher heranzoomen.';
+
+function ffehZoomClass(zoom) {
+  if (zoom < 12) return 'ffeh-zoom-hidden';
+  if (zoom < 14) return 'ffeh-zoom-s';
+  if (zoom < 16) return 'ffeh-zoom-m';
+  // NavLog zeichnet seine Rastersymbole in hohen Stufen deutlich größer;
+  // der Statusring wächst mit, sonst verschwindet er im Symbol.
+  if (zoom < 17) return 'ffeh-zoom-l';
+  if (zoom < 18) return 'ffeh-zoom-xl';
+  return 'ffeh-zoom-xxl';
+}
+
+function updateFfehZoom() {
+  if (!state.map) return;
+  const zoom = state.map.getZoom();
+  let name = ffehZoomClass(zoom);
+  // Im Werkzeugmodus bleiben die Punkte auch in der Übersicht sichtbar –
+  // bewerten kann man nur, was man sieht.
+  const forced = name === 'ffeh-zoom-hidden' && state.ffeh.active;
+  if (forced) name = 'ffeh-zoom-s';
+  const container = state.map.getContainer();
+  for (const cls of FFEH_ZOOM_CLASSES) container.classList.toggle(cls, cls === name);
+  if (forced) setFfehHint(FFEH_ZOOM_HINT);
+}
+
+function toggleFfehLayer() {
+  state.ffeh.visible = $('ffehToggle').checked;
+  if (!state.ffeh.group) return;
+  if (state.ffeh.visible) {
+    state.ffeh.group.addTo(state.map);
+    setFfehDragging(state.ffeh.active);
+  } else {
+    state.map.removeLayer(state.ffeh.group);
+    if (state.ffeh.active) closeFfeh();
+  }
+  renderLegend();
+}
+
+// ── Werkzeugmodus ─────────────────────────────────────────────────────────
+const FFEH_IDLE_HINT = 'Kategorie wählen und auf die Karte tippen. Vorhandene Punkte antippen zum Bearbeiten oder ziehen zum Verschieben.';
+
+function toggleFfeh() { $('ffehBar').hidden ? openFfeh() : closeFfeh(); }
+
+function openFfeh() {
+  if (state.measure.active) closeMeasure();
+  if (state.signs.active) closeSigns();
+  if (!state.ffeh.visible) { $('ffehToggle').checked = true; toggleFfehLayer(); }
+  setLegendOverlay(false, false);
+  setSheetCollapsed('ffehBar', false);
+  $('ffehBar').hidden = false;
+  state.ffeh.active = true;
+  $('ffehButton').setAttribute('aria-expanded', 'true');
+  closePanel();
+  closeAppMenu();
+  $('searchBox').hidden = true;
+  $('searchButton').setAttribute('aria-expanded', 'false');
+  state.map.getContainer().classList.add('measuring');
+  setFfehDragging(true);
+  updateFfehEditActions();
+  if (state.ffeh.selected) selectFfehCategory(state.ffeh.selected);
+  else setFfehHint(FFEH_IDLE_HINT);
+  // Setzt gegebenenfalls den Übersichtshinweis und holt ausgeblendete Punkte zurück.
+  updateFfehZoom();
+}
+
+// Schließt das Werkzeug. „meldung“ ist eine bereits feststehende Rückmeldung
+// (etwa aus „Abbrechen“), die hier nur noch mitgesendet wird.
+// Das × schließt nur das Werkzeug – ein laufender Punkt wird behalten, nie verworfen.
+// Alle Botschaften teilen sich einen einzigen Toast, sonst überschreibt der
+// Filterhinweis die Speicher- oder Verwurfsmeldung sofort wieder.
+function closeFfeh(meldung = '') {
+  const gespeichert = finishFfehEdit(false);
+  state.ffeh.active = false;
+  $('ffehBar').hidden = true;
+  $('ffehButton').setAttribute('aria-expanded', 'false');
+  if (!state.measure.active && !state.signs.active) state.map.getContainer().classList.remove('measuring');
+  setFfehDragging(false);
+  updateFfehZoom();
+  const hinweise = [];
+  if (meldung) hinweise.push(meldung);
+  if (gespeichert) hinweise.push('Punkt gespeichert.');
+  if (state.ffeh.openOnly) hinweise.push('Der Filter „Nur offene zeigen“ bleibt aktiv, bis die Karte neu geladen wird.');
+  if (hinweise.length) toast(hinweise.join(' '));
+}
+
+// „✓ Fertig“ und „Abbrechen“ beenden nicht nur die Bearbeitung, sondern schließen
+// das Werkzeug gleich mit: nach einer Bewertung ist das Sheet erledigt und müsste
+// sonst extra über × weggetippt werden. Beide Wege laufen über closeFfeh, damit es
+// bei genau einem Toast bleibt. Der Erkundungskreislauf bleibt erhalten – der
+// nächste Kartentipp öffnet wieder die Symbolabfrage mit „⌖ Punkt bewerten“.
+// Reines Anlegen über die Palette schließt nichts, dort bleibt das Sheet offen.
+function finishFfehEditAndClose() { closeFfeh(); }
+function cancelFfehEditAndClose() { closeFfeh(cancelFfehEdit(false)); }
+
+function selectFfehCategory(key) {
+  const category = FFEH_INDEX.get(key);
+  if (!category) return;
+  markFfehCategory(key);
+  if (state.ffeh.editingId) {
+    updateFfehPoint(state.ffeh.editingId, { kategorie: key });
+    setFfehHint(`Kategorie geändert: ${category.name}.`);
+    return;
+  }
+  state.ffeh.selected = key;
+  setFfehHint(`${category.name}: auf die Karte tippen zum Anlegen.`);
+}
+
+function markFfehCategory(key) {
+  for (const button of document.querySelectorAll('.ffeh-symbol-button')) button.classList.toggle('active', button.dataset.category === key);
+}
+
+function handleFfehClick(event) {
+  // Eine laufende Bearbeitung wird nur über „✓ Fertig“ oder „Abbrechen“ beendet,
+  // damit ein Tipp daneben nichts stillschweigend abschließt.
+  if (state.ffeh.editingId) {
+    setFfehHint('Bearbeitung läuft: Marker ziehen zum Verschieben, danach „✓ Fertig“ oder „Abbrechen“ tippen.');
+    return;
+  }
+  // Ohne gewählte Kategorie ist der Tipp eine Erkundung: Symbolinformation
+  // öffnen und darüber „⌖ Punkt bewerten“ anbieten. Ohne diesen Weg endet jeder
+  // Kartentipp im Werkzeug und die Bewertung wäre je Sitzung nur einmal
+  // erreichbar – nach „✓ Fertig“ käme das Formular nie wieder.
+  if (!state.ffeh.selected) {
+    setFfehHint('Symbolinformation wird geöffnet: „⌖ Punkt bewerten“ legt hier einen Punkt an. Für ein eigenes Symbol zuerst eine Kategorie wählen.');
+    showFeatureQuery(event);
+    return;
+  }
+  const category = ffehCategory(state.ffeh.selected);
+  const point = {
+    id: crypto.randomUUID(),
+    kategorie: category.key,
+    name: $('ffehNameInput').value.trim(),
+    beschreibung: $('ffehDescriptionInput').value.trim(),
+    status: 'offen',
+    quelle: 'karte',
+    erreichbar_lf: null,
+    geprueft_am: null,
+    geprueft_von: null,
+    erstellt_am: new Date().toISOString(),
+    lat: event.latlng.lat,
+    lng: event.latlng.lng
+  };
+  upsertFfehPoint(point);
+  $('ffehNameInput').value = '';
+  $('ffehDescriptionInput').value = '';
+  setFfehHint(`${point.name || category.name} angelegt. Zum Bewerten antippen oder weiteren Punkt setzen.`);
+}
+
+// ── Erkundungsmodus: drei Wege, ein gemeinsames Bewertungsformular ─────────
+// Weg 1 (NavLog-POI) und Weg 2 (Rastersymbol) starten im Koordinaten-Popup,
+// Weg 3 über die eigene GPS-Position. Alle drei erzeugen dasselbe Datenmodell.
+// Der Knopf trägt alles bei sich: Koordinaten und – sobald die Abfrage
+// geantwortet hat – die Vorbefüllung als JSON im Datenattribut. Vorher gab es
+// dafür einen Zwischenspeicher (state.lastQuery), der über Koordinaten und
+// Zeitpunkt wiedergefunden werden musste; am Gerät hat diese Wiederfindung
+// versagt. Ein Datenattribut kann gar nicht zur falschen Abfrage gehören.
+function ffehAssessHtml(lat, lng, seed = null) {
+  const seedAttribut = seed ? ` data-seed="${escapeAttribute(JSON.stringify(seed))}"` : '';
+  return `<div class="ffeh-assess-row"><button type="button" class="ffeh-assess-button" data-lat="${lat}" data-lon="${lng}"${seedAttribut}>⌖ Punkt bewerten</button><small>Legt hier einen eigenen FFEH-Punkt an und öffnet die Bewertung.</small></div>`;
+}
+
+// Vorbefüllung aus einem angezeigten Treffer. Layer und Eigenschaften dienen
+// nur noch der Kategorie- und Namensvorgabe; die Quelle ist bei jedem
+// angezeigten Objekt „navlog“ (siehe FFEH_SOURCES).
+function buildFfehSeed(properties, layer) {
+  return {
+    name: ffehNameFromProperties(properties, layer),
+    beschreibung: ffehHintFromProperties(properties),
+    kategorie: guessFfehCategory(properties, layer),
+    quelle: 'navlog',
+    treffer: true
+  };
+}
+
+// Seed vom Knopf lesen. Fremder oder beschädigter Inhalt darf die Bewertung
+// nicht verhindern – dann wird ohne Vorbefüllung weitergemacht.
+function parseFfehSeed(rohwert) {
+  if (!rohwert) return null;
+  try {
+    const seed = JSON.parse(rohwert);
+    if (!seed || typeof seed !== 'object' || !seed.treffer) return null;
+    return {
+      name: String(seed.name || '').slice(0, 60),
+      beschreibung: String(seed.beschreibung || '').slice(0, 200),
+      kategorie: ffehCategory(seed.kategorie).key,
+      quelle: ffehSourceKey(seed.quelle),
+      treffer: true
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Der Titel der Abfrage ist der beste Namensvorschlag. Verworfen wird der
+// generische Platzhalter und jeder Rückfall auf einen Layertitel, der kein
+// Punkt-Layer ist: „DTK0025“ oder „Waldwege und Rückegassen“ benennen kein
+// Objekt. „Rettungspunkt 1234“ oder „Hydranten“ bleiben brauchbar, auch wenn
+// sie dem Titel eines Punkt-Layers gleichen.
+function ffehNameFromProperties(properties, layer) {
+  if (!properties) return '';
+  const title = String(featureTitle(properties, layer) || '').trim();
+  if (!title || title === 'Kartenobjekt') return '';
+  // „Einsatzhinweis“ ist eine Textsorte, kein Name. Falls das Objekt zusätzlich
+  // eine Bezeichnung trägt, wird die genommen, sonst bleibt der Name leer –
+  // der Freitext selbst landet in der Beschreibung (ffehHintFromProperties).
+  if (title === 'Einsatzhinweis') return descriptiveName(properties).slice(0, 60);
+  if (isNonPointLayerLabel(title)) return '';
+  return title.slice(0, 60);
+}
+
+// Bezeichnende Eigenschaft eines Objekts, ohne reine Zahlenschlüssel.
+function descriptiveName(properties) {
+  const value = [properties.bezeichnung, properties.name, properties.objektart].find(item => item && !/^\d+(?:\.0)?$/.test(String(item)));
+  return value ? String(value).trim() : '';
+}
+
+// Gleicht der Vorschlag dem Titel eines Layers, der keine Punkte führt, dann
+// stammt er aus dem Rückfall in featureTitle und benennt nichts.
+function isNonPointLayerLabel(title) {
+  const label = normalizeLayerLabel(title);
+  if (!label) return false;
+  return state.availableLayers.some(layer => layerKind(layer) !== 'points'
+    && (normalizeLayerLabel(layer.title) === label || normalizeLayerLabel(layer.name) === label));
+}
+
+// Freitext-Hinweise aus NavLog (Telefonnummern, Auflagen, Zufahrtsregeln) sind
+// für die Erkundung wertvoll und werden in die Beschreibung übernommen.
+// 200 Zeichen entsprechen der Feldlänge von #ffehDescriptionInput.
+function ffehHintFromProperties(properties) {
+  if (!properties) return '';
+  const hint = friendlyProperties(properties).find(entry => entry.label === 'Hinweis');
+  return hint ? String(hint.value).trim().slice(0, 200) : '';
+}
+
+// Kategorie-Heuristik über Layer- und Eigenschaftstexte der NavLog-Abfrage.
+function guessFfehCategory(properties, layer) {
+  const values = Object.entries(properties || {}).map(([key, value]) => `${key} ${value}`).join(' ');
+  const haystack = `${layer?.title || ''} ${layer?.name || ''} ${values}`.toLowerCase();
+  if (/hydrant/.test(haystack)) return 'hydrant';
+  if (/brunnen/.test(haystack)) return 'brunnen';
+  if (/zisterne/.test(haystack)) return 'zisterne';
+  if (/teich|gewässer|gewaesser/.test(haystack)) return 'loeschteich';
+  if (/wasser|entnahme|saugstelle/.test(haystack)) return 'wasserentnahme';
+  if (/rettungspunkt|treffpunkt/.test(haystack)) return 'treffpunkt';
+  if (/schranke/.test(haystack)) return 'schranke';
+  // Punkt-Layer der Waldbrandkarte zeigen fast nur Wasserstellen. Als Vorgabe
+  // für Datenmodell und Export ist das brauchbarer als „Sonstiges“.
+  return layer && layerKind(layer) === 'points' ? 'wasserentnahme' : 'sonstiges';
+}
+
+// Großzügige Regel (ausdrücklicher Nutzerwunsch): Hat die Abfrage überhaupt ein
+// Objekt mit Inhalt angezeigt, dann steht dort ein NavLog-Symbol – auch ein
+// Einsatzhinweis oder eine Wendemöglichkeit ist eines. Hintergrundlayer werden
+// gar nicht erst abgefragt, also bleibt nichts Fremdes übrig. Ohne Seed (Knopf
+// aus dem Lade- oder Fehlerzweig, oder gar keine Abfrage) bleibt es bei
+// „In der Karte erfasst“. Die Quelle ist im Formular jederzeit korrigierbar.
+function startFfehAssessment(lat, lng, rohwert) {
+  const seed = parseFfehSeed(rohwert);
+  createFfehAssessment(lat, lng, seed?.quelle || 'karte', seed);
+}
+
+function createFfehAssessment(lat, lng, quelle, seed = null) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  // Der neue Punkt muss sichtbar sein, sonst bewertet man ins Leere.
+  if (!state.ffeh.visible) { $('ffehToggle').checked = true; toggleFfehLayer(); }
+  const category = ffehCategory(seed?.kategorie);
+  const point = {
+    id: crypto.randomUUID(),
+    // Ohne Vorschlag bleibt der Name leer – der Kategoriename als Vorgabe hat
+    // dazu geführt, dass viele Punkte gleich hießen.
+    kategorie: category.key,
+    name: seed?.name || '',
+    // Ein Freitext-Hinweis aus der Symbolabfrage ist der Einstieg in die
+    // Erkundung – lieber vorbefüllt und korrigierbar als verloren.
+    beschreibung: seed?.beschreibung || '',
+    status: 'offen',
+    quelle,
+    erreichbar_lf: null,
+    geprueft_am: null,
+    geprueft_von: null,
+    erstellt_am: new Date().toISOString(),
+    lat, lng
+  };
+  upsertFfehPoint(point);
+  editFfehPoint(point.id, true);
+  // „Vorbefüllt“ nur behaupten, wenn wirklich etwas aus der Abfrage übernommen wurde.
+  const vorbefuellt = Boolean(seed?.name) || Boolean(seed?.beschreibung) || (Boolean(seed?.kategorie) && seed.kategorie !== 'sonstiges');
+  // Bei einem NavLog-Symbol ist die Palette ausgeblendet – dann nicht zur
+  // Kategorie auffordern, sondern gleich zu Name und Status.
+  setFfehHint(`Neuer Punkt (${ffehSourceName(quelle)})${vorbefuellt ? ', vorbefüllt aus NavLog-Symbolinfo' : ''}: `
+    + (quelle === 'navlog'
+      ? 'Name prüfen und Status setzen. Zum Schluss „✓ Fertig“ tippen.'
+      : 'Kategorie prüfen, Name eintragen und Status setzen. Zum Schluss „✓ Fertig“ tippen.'));
+  return point;
+}
+
+function ffehSourceName(key) { return FFEH_SOURCE_INDEX.get(key)?.name || 'In der Karte erfasst'; }
+function ffehSourceKey(key) { return FFEH_SOURCE_INDEX.has(key) ? key : 'karte'; }
+
+// Weg 3: einmalige Ortung, Punkt an der eigenen Position anlegen.
+function addFfehPointAtLocation() {
+  if (!state.map) return;
+  setFfehHint('Standort wird ermittelt …');
+  state.map.once('locationfound', onFfehLocationFound);
+  state.map.once('locationerror', onFfehLocationError);
+  state.map.locate({ setView: false, enableHighAccuracy: true, timeout: 15000 });
+}
+
+function onFfehLocationFound(event) {
+  state.map.off('locationerror', onFfehLocationError);
+  state.map.setView(event.latlng, Math.max(state.map.getZoom(), 17));
+  const point = createFfehAssessment(event.latlng.lat, event.latlng.lng, 'vor_ort');
+  if (point) setFfehHint(`Vor Ort angelegt (Genauigkeit etwa ${Math.round(event.accuracy)} m). Bitte Kategorie wählen und bewerten.`);
+}
+
+function onFfehLocationError() {
+  state.map.off('locationfound', onFfehLocationFound);
+  setFfehHint('Standort nicht verfügbar. Punkt bitte durch Tippen auf die Karte anlegen.');
+  toast('Der Standort konnte nicht ermittelt werden. Bitte Browserfreigabe prüfen.');
+}
+
+function onFfehMarkerClick(id, event) {
+  // Andere Werkzeuge behalten Vorrang, damit über Punkten weitergearbeitet werden kann.
+  if (state.measure.active) { handleMeasureClick(event); return; }
+  if (state.signs.active) { handleSignClick(event); return; }
+  const point = findFfehPoint(id);
+  if (!point) return;
+  if (state.ffeh.active) {
+    // Erneutes Antippen desselben Punktes darf den gesicherten Ausgangszustand
+    // nicht überschreiben; der Wechsel auf einen anderen schließt sauber ab.
+    if (state.ffeh.editingId === point.id) { setFfehHint('Punkt ist in Bearbeitung: Marker ziehen zum Verschieben, danach „✓ Fertig“ oder „Abbrechen“.'); return; }
+    if (state.ffeh.editingId) finishFfehEdit();
+    startFfehEdit(point);
+    return;
+  }
+  L.popup({ maxWidth: 340 }).setLatLng(event.latlng).setContent(ffehPopupHtml(point)).openOn(state.map);
+}
+
+// Bewertungs- und Bearbeitungsformular: füllt das Sheet mit dem Punkt.
+// „neu“ markiert einen gerade erst angelegten Punkt – „Abbrechen“ entfernt ihn
+// dann wieder, statt einen Ausgangszustand zurückzuholen.
+function startFfehEdit(point, neu = false) {
+  state.ffeh.editingId = point.id;
+  state.ffeh.editingIsNew = neu;
+  state.ffeh.editingBackup = neu ? null : JSON.parse(JSON.stringify(point));
+  // Ohne bisherigen lokalen Eintrag stellt „Abbrechen“ den reinen Repo-Stand her.
+  state.ffeh.editingHadLocal = neu || loadFfehLocal().some(item => item?.id === point.id);
+  state.ffeh.selected = null;
+  setSheetCollapsed('ffehBar', false);
+  markFfehCategory(point.kategorie);
+  $('ffehNameInput').value = point.name || '';
+  $('ffehDescriptionInput').value = point.beschreibung || '';
+  $('ffehStatusSelect').value = ffehStatus(point.status).key;
+  $('ffehAccessSelect').value = point.erreichbar_lf === true ? 'ja' : point.erreichbar_lf === false ? 'nein' : '';
+  $('ffehCheckerInput').value = point.geprueft_von || loadFfehChecker();
+  $('ffehSourceSelect').value = ffehSourceKey(point.quelle);
+  updateFfehEditActions();
+  highlightFfehMarker(point.id);
+  setFfehHint(`${point.name || ffehCategory(point.kategorie).name} bearbeiten: Marker auf der Karte ziehen zum Verschieben. Zum Schluss „✓ Fertig“ tippen.`);
+}
+
+function endFfehEdit() {
+  if (!state.ffeh.editingId) return;
+  state.ffeh.editingId = null;
+  state.ffeh.editingBackup = null;
+  state.ffeh.editingIsNew = false;
+  state.ffeh.editingHadLocal = false;
+  markFfehCategory(null);
+  $('ffehNameInput').value = '';
+  $('ffehDescriptionInput').value = '';
+  $('ffehStatusSelect').value = 'offen';
+  $('ffehAccessSelect').value = '';
+  $('ffehCheckerInput').value = '';
+  $('ffehSourceSelect').value = 'karte';
+  updateFfehEditActions();
+  highlightFfehMarker(null);
+  // Der bearbeitete Punkt war vom Filter ausgenommen – jetzt gilt er wieder.
+  if (state.ffeh.openOnly) renderFfehLayer();
+}
+
+// Im Leerlauf steht der GPS-Knopf im Sheet, während der Bearbeitung der Abschluss.
+function updateFfehEditActions() {
+  const editing = Boolean(state.ffeh.editingId);
+  $('ffehIdleActions').hidden = editing;
+  $('ffehEditActions').hidden = !editing;
+  updateFfehCategoryChoice();
+}
+
+// Bei einem NavLog-Punkt bleibt das Rastersymbol der Karte stehen, der eigene
+// Punkt legt nur den Statusring darum. Eine Kategorie-Auswahl würde dort eine
+// Wirkung vortäuschen, die auf der Karte gar nicht sichtbar wird – gespeichert
+// (und exportiert) wird sie trotzdem. Im Leerlauf bleibt die Palette sichtbar.
+function updateFfehCategoryChoice() {
+  const navlog = Boolean(state.ffeh.editingId) && ffehSourceKey($('ffehSourceSelect').value) === 'navlog';
+  $('ffehPalette').hidden = navlog;
+  $('ffehCategoryNote').hidden = !navlog;
+}
+
+// „✓ Fertig“: Eingaben sind bereits gespeichert, hier wird nur sauber abgeschlossen.
+// Rückgabe: ob wirklich eine Bearbeitung lief. Beim Schließen des Werkzeugs
+// übernimmt closeFfeh die Rückmeldung, damit nicht zwei Toasts kollidieren.
+function finishFfehEdit(mitHinweis = true) {
+  if (!state.ffeh.editingId) return false;
+  endFfehEdit();
+  setFfehHint(FFEH_IDLE_HINT);
+  if (mitHinweis) toast('Punkt gespeichert.');
+  return true;
+}
+
+// „Abbrechen“: Ausgangszustand zurückholen, neu angelegte Punkte wieder entfernen.
+// Rückgabe: die Rückmeldung an die Einsatzkraft. Wird das Werkzeug im selben Zug
+// geschlossen, übernimmt closeFfeh sie – sonst kollidieren zwei Toasts.
+function cancelFfehEdit(mitHinweis = true) {
+  const { editingId: id, editingBackup: backup, editingIsNew: neu, editingHadLocal: hadLocal } = state.ffeh;
+  if (!id) return '';
+  endFfehEdit();
+  let meldung = '';
+  if (neu || !hadLocal) {
+    // Nie „echt“ gewesen beziehungsweise vorher nur im Repo-Bestand: kein Tombstone,
+    // nur der lokale Eintrag verschwindet.
+    saveFfehLocal(loadFfehLocal().filter(item => item?.id !== id));
+    renderFfehLayer();
+    meldung = neu ? 'Neuer Punkt verworfen.' : 'Änderungen verworfen.';
+  } else if (backup) {
+    upsertFfehPoint(backup);
+    meldung = 'Änderungen verworfen.';
+  }
+  setFfehHint(FFEH_IDLE_HINT);
+  if (meldung && mitHinweis) toast(meldung);
+  return meldung;
+}
+
+function onFfehOptionInput(statusChanged = false, sourceChanged = false) {
+  const id = state.ffeh.editingId;
+  if (!id) return;
+  const access = $('ffehAccessSelect').value;
+  const changes = {
+    name: $('ffehNameInput').value.trim(),
+    beschreibung: $('ffehDescriptionInput').value.trim(),
+    status: ffehStatus($('ffehStatusSelect').value).key,
+    // Die Quelle steuert seit dem Statusring auch die Darstellung.
+    // updateFfehPoint zieht über refreshFfehPoint das Markersymbol nach.
+    quelle: ffehSourceKey($('ffehSourceSelect').value),
+    erreichbar_lf: access === 'ja' ? true : access === 'nein' ? false : null,
+    geprueft_von: $('ffehCheckerInput').value.trim() || null
+  };
+  // Der Prüfstempel entsteht erst mit einer Statusentscheidung.
+  if (statusChanged) changes.geprueft_am = changes.status === 'offen' ? null : todayIso();
+  saveFfehChecker(changes.geprueft_von);
+  updateFfehPoint(id, changes);
+  // Ohne Prüfername nur ein dezenter Hinweis, keine Sperre.
+  if (statusChanged) setFfehHint(changes.status !== 'offen' && !changes.geprueft_von
+    ? 'Status gesetzt. Bitte noch „Geprüft von“ eintragen – der Name wird für weitere Bewertungen gemerkt.'
+    : `Status gesetzt: ${ffehStatus(changes.status).name}.`);
+  // Mit der Quelle wechselt die Darstellung – und damit auch, ob die
+  // Kategorie-Palette überhaupt etwas bewirkt.
+  if (sourceChanged) updateFfehCategoryChoice();
+  if (sourceChanged) setFfehHint(changes.quelle === 'navlog'
+    ? 'Quelle geändert: Der Punkt legt jetzt nur einen Statusring um das NavLog-Symbol, die Kategorie wird nicht überzeichnet.'
+    : `Quelle geändert: ${ffehSourceName(changes.quelle)}. Der Punkt zeigt wieder das volle Kategoriesymbol.`);
+}
+
+function loadFfehChecker() {
+  try { return localStorage.getItem(FFEH_CHECKER_STORAGE) || ''; }
+  catch { return ''; }
+}
+
+function saveFfehChecker(name) {
+  if (!name) return;
+  try { localStorage.setItem(FFEH_CHECKER_STORAGE, name); } catch { }
+}
+
+function editFfehPoint(id, neu = false) {
+  state.map.closePopup();
+  if ($('ffehBar').hidden) openFfeh();
+  const point = findFfehPoint(id);
+  if (!point) return;
+  // Aus einem offen gebliebenen Popup heraus kann ein Wechsel mitten in einer
+  // Bearbeitung kommen. Der alte Punkt wird still abgeschlossen – seine Eingaben
+  // sind längst gespeichert – damit Sicherung und Knöpfe zum neuen Punkt passen.
+  if (state.ffeh.editingId && state.ffeh.editingId !== id) endFfehEdit();
+  startFfehEdit(point, neu);
+}
+
+async function deleteFfehPoint(id) {
+  const point = findFfehPoint(id);
+  if (!point) return;
+  if (!await confirmAction(`„${point.name || 'Punkt'}“ wirklich löschen?`)) return;
+  const official = state.ffeh.repo.some(entry => entry.id === id);
+  const items = loadFfehLocal().filter(item => item.id !== id);
+  // Offizielle Punkte bleiben in der Datei – lokal blendet ein Tombstone sie aus.
+  if (official) items.push({ id, geloescht: true, geloescht_am: new Date().toISOString() });
+  saveFfehLocal(items);
+  if (state.ffeh.editingId === id) endFfehEdit();
+  state.map.closePopup();
+  renderFfehLayer();
+  toast(official ? 'Offizieller Punkt lokal ausgeblendet.' : 'Punkt gelöscht.');
+}
+
+function setFfehHint(text) { $('ffehHint').textContent = text; }
+
+// ── Popup und Legende ─────────────────────────────────────────────────────
+function ffehPopupHtml(point) {
+  const category = ffehCategory(point.kategorie);
+  const status = ffehStatus(point.status);
+  const access = point.erreichbar_lf === true ? 'Ja' : point.erreichbar_lf === false ? 'Nein' : 'Unbekannt';
+  const checked = point.geprueft_am
+    ? `${formatIsoDate(point.geprueft_am)}${point.geprueft_von ? ` · ${escapeHtml(point.geprueft_von)}` : ''}`
+    : 'Noch nicht geprüft';
+  const rows = [
+    ['Kategorie', escapeHtml(category.name)],
+    ['Status', `<span class="ffeh-status-value" style="color:${status.color}">${escapeHtml(status.name)}</span>`],
+    ['Mit LF anfahrbar', access],
+    ['Geprüft', checked],
+    ['Quelle', escapeHtml(FFEH_SOURCE_INDEX.get(point.quelle)?.name || point.quelle || '')]
+  ].map(([label, value]) => `<div class="ffeh-popup-row"><span>${label}</span><strong>${value}</strong></div>`).join('');
+  const description = point.beschreibung ? `<p>${escapeHtml(point.beschreibung)}</p>` : '';
+  const origin = point.offiziell ? 'Offizieller Datenbestand' : 'Lokaler Entwurf auf diesem Gerät';
+  return `<div class="measure-popup ffeh-popup"><strong>${escapeHtml(point.name || category.name)}</strong>`
+    + `<div class="ffeh-popup-rows">${rows}</div>${description}`
+    + `<div class="ffeh-origin muted">${origin}</div>`
+    + coordinatePopup(point.lat, point.lng)
+    + `<div class="measure-popup-actions"><button type="button" class="ffeh-edit-button" data-id="${escapeHtml(point.id)}">Bearbeiten</button><button type="button" class="ffeh-delete-button" data-id="${escapeHtml(point.id)}">Löschen</button></div></div>`;
+}
+
+function formatIsoDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? escapeHtml(String(value)) : date.toLocaleDateString('de-DE');
+}
+
+function ffehLegendItem() {
+  const item = document.createElement('div');
+  item.className = 'legend-item ffeh-legend';
+  const title = document.createElement('strong');
+  title.textContent = 'Waldbrand POI FFEH (eigene Punkte)';
+  item.append(title);
+  for (const status of FFEH_STATUS) {
+    const row = document.createElement('div');
+    row.className = 'ffeh-legend-row';
+    const dot = document.createElement('span');
+    dot.className = `ffeh-legend-dot${status.key === 'nicht_auffindbar' ? ' missing' : ''}`;
+    dot.style.setProperty('--ffeh-status', status.color);
+    const text = document.createElement('span');
+    text.textContent = status.name;
+    row.append(dot, text);
+    item.append(row);
+  }
+  // Punkte aus NavLog tragen statt eines eigenen Symbols nur den Statusring.
+  const ringRow = document.createElement('div');
+  ringRow.className = 'ffeh-legend-row';
+  const ring = document.createElement('span');
+  ring.className = 'ffeh-legend-ring';
+  ring.style.setProperty('--ffeh-status', ffehStatus('brauchbar').color);
+  const ringText = document.createElement('span');
+  ringText.textContent = 'Statusring um NavLog-Symbol';
+  ringRow.append(ring, ringText);
+  item.append(ringRow);
+  const note = document.createElement('small');
+  note.textContent = 'Farbiger Ring am Symbol = Status der Stelle. Punkte mit der Quelle „NavLog-Symbol“ bekommen kein eigenes '
+    + 'Symbol, sondern nur einen offenen Statusring um das Kartensymbol: gestrichelt = offen, durchgestrichen = nicht auffindbar.';
+  item.append(note);
+  return item;
+}
+
+// ── Export und Import ─────────────────────────────────────────────────────
+function ffehPointToFeature(point) {
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [Number(point.lng.toFixed(6)), Number(point.lat.toFixed(6))] },
+    properties: {
+      id: point.id,
+      kategorie: point.kategorie,
+      name: point.name || '',
+      beschreibung: point.beschreibung || '',
+      status: point.status,
+      quelle: point.quelle,
+      erreichbar_lf: point.erreichbar_lf ?? null,
+      geprueft_am: point.geprueft_am || null,
+      geprueft_von: point.geprueft_von || null,
+      erstellt_am: point.erstellt_am || null
+    }
+  };
+}
+
+// Anfahrbarkeit aus einer Datei lesen: neues Feld zuerst, sonst der Altbestand.
+function ffehAccessValue(properties) {
+  if (typeof properties?.erreichbar_lf === 'boolean') return properties.erreichbar_lf;
+  if (typeof properties?.erreichbar_tlf === 'boolean') return properties.erreichbar_tlf;
+  return null;
+}
+
+function featureToFfehPoint(feature) {
+  const coordinates = feature?.geometry?.coordinates;
+  if (feature?.geometry?.type !== 'Point' || !Array.isArray(coordinates)) return null;
+  const lng = Number(coordinates[0]);
+  const lat = Number(coordinates[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const properties = feature.properties || {};
+  // Fremde Dateien werden wie Nutzereingaben behandelt: alles auf Zeichenketten
+  // begrenzen, damit später weder Markup noch Objekte in die Oberfläche geraten.
+  return {
+    id: String(properties.id || crypto.randomUUID()).slice(0, 80),
+    kategorie: ffehCategory(properties.kategorie).key,
+    name: String(properties.name || '').slice(0, 120),
+    beschreibung: String(properties.beschreibung || '').slice(0, 500),
+    status: ffehStatus(properties.status).key,
+    quelle: FFEH_SOURCE_INDEX.has(properties.quelle) ? properties.quelle : 'karte',
+    // Fallback auf das alte Feld „erreichbar_tlf“ aus früheren Exporten.
+    erreichbar_lf: ffehAccessValue(properties),
+    geprueft_am: properties.geprueft_am ? String(properties.geprueft_am).slice(0, 40) : null,
+    geprueft_von: properties.geprueft_von ? String(properties.geprueft_von).slice(0, 40) : null,
+    erstellt_am: properties.erstellt_am ? String(properties.erstellt_am).slice(0, 40) : new Date().toISOString(),
+    lat, lng
+  };
+}
+
+function exportFfehPoints() {
+  const features = mergedFfehPoints().map(ffehPointToFeature);
+  const data = {
+    type: 'FeatureCollection',
+    name: 'Waldbrand POI FFEH',
+    erzeugt_am: new Date().toISOString(),
+    geloescht: ffehTombstones().map(item => ({ id: item.id, geloescht: true, geloescht_am: item.geloescht_am || null })),
+    features
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/geo+json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `waldbrand-poi-ffeh-${todayIso()}.geojson`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast(`${features.length} Punkte exportiert.`);
+}
+
+// Bei gleicher id gewinnt der jüngere Prüf- beziehungsweise Erstellstempel.
+function ffehStamp(point) { return String(point?.geprueft_am || point?.erstellt_am || ''); }
+
+async function importFfehFile(file) {
+  let data = null;
+  try { data = JSON.parse(await file.text()); }
+  catch { toast('Die Datei konnte nicht gelesen werden.'); return; }
+  const incoming = (Array.isArray(data?.features) ? data.features : []).map(featureToFfehPoint).filter(Boolean);
+  const tombstones = (Array.isArray(data?.geloescht) ? data.geloescht : []).filter(item => item?.id);
+  if (!incoming.length && !tombstones.length) { toast('Die Datei enthält keine FFEH-Punkte.'); return; }
+  const local = new Map(loadFfehLocal().filter(item => item?.id).map(item => [item.id, item]));
+  const current = new Map(mergedFfehPoints().map(point => [point.id, point]));
+  let created = 0, updated = 0, removed = 0, unchanged = 0;
+  for (const point of incoming) {
+    const existing = current.get(point.id);
+    if (!existing) { local.set(point.id, point); created++; }
+    else if (ffehStamp(point) > ffehStamp(existing)) { local.set(point.id, point); updated++; }
+    else unchanged++;
+  }
+  for (const stone of tombstones) {
+    if (local.get(stone.id)?.geloescht || !current.has(stone.id)) { unchanged++; continue; }
+    local.set(stone.id, { id: stone.id, geloescht: true, geloescht_am: stone.geloescht_am || new Date().toISOString() });
+    removed++;
+  }
+  saveFfehLocal([...local.values()]);
+  endFfehEdit();
+  renderFfehLayer();
+  toast(`Import: ${created} neu, ${updated} aktualisiert, ${removed} gelöscht, ${unchanged} unverändert.`);
+}
+
+// ── Straßenbezeichnungen (eigener Overlay-Layer) ───────────────────────────
+// Auf der NavLog-DTK25 sind Straßennummern grün wie Schneisennamen beschriftet.
+// Der Layer legt deshalb Wegweiser-Schilder und Straßennamen über die Karte –
+// reine Beschriftung, keine flächige Übermalung. Die Daten kommen aus dem Repo
+// und werden erst beim ersten Einschalten geladen.
+const STRASSEN_DATA_URL = 'data/strassen.geojson';
+// Ausdünnung: Bildschirmraster in Pixeln, pro Zelle höchstens ein Label.
+const STRASSEN_RASTER = 140;
+const STRASSEN_MAX_LABELS = 80;
+const STRASSEN_MAX_LINIEN = 300;
+const STRASSEN_MAX_KANDIDATEN = 600;
+const STRASSEN_NAME_ZOOM = 15;
+// Zoomstaffelung nach Bedeutung: erst A und B, dann L, dann K, zuletzt Namen.
+const STRASSEN_ARTEN = {
+  A: { klasse: 'autobahn', name: 'Autobahn', zoom: 11, rang: 0, farbe: '#12468f', gewicht: 4, beispiel: 'A 5' },
+  B: { klasse: 'bundesstrasse', name: 'Bundesstraße', zoom: 11, rang: 1, farbe: '#a58200', gewicht: 3.5, beispiel: 'B 47' },
+  L: { klasse: 'landstrasse', name: 'Landesstraße', zoom: 12, rang: 2, farbe: '#3c423d', gewicht: 3, beispiel: 'L 3261' },
+  K: { klasse: 'kreisstrasse', name: 'Kreisstraße', zoom: 13, rang: 3, farbe: '#3c423d', gewicht: 2.5, beispiel: 'K 31' }
+};
+
+function initStrassen() {
+  state.strassen.group = L.layerGroup();
+  state.map.on('moveend zoomend resize', scheduleStrassenRefresh);
+  $('strassenToggle').checked = state.config.showStrassenLayer === true;
+  if ($('strassenToggle').checked) toggleStrassenLayer();
+}
+
+// Pannen und Zoomen lösen mehrere Ereignisse aus; einmal neu aufbauen genügt.
+function scheduleStrassenRefresh() {
+  if (!state.strassen.visible) return;
+  clearTimeout(state.strassen.timer);
+  state.strassen.timer = setTimeout(refreshStrassenLabels, 90);
+}
+
+async function toggleStrassenLayer() {
+  state.strassen.visible = $('strassenToggle').checked;
+  if (!state.strassen.group) return;
+  if (!state.strassen.visible) {
+    state.map.removeLayer(state.strassen.group);
+    state.strassen.group.clearLayers();
+    renderLegend();
+    return;
+  }
+  const geladen = await loadStrassenData();
+  if (!geladen) {
+    $('strassenToggle').checked = false;
+    state.strassen.visible = false;
+    toast('Die Straßenbezeichnungen konnten nicht geladen werden.');
+    renderLegend();
+    return;
+  }
+  // Während des Ladens kann der Layer längst wieder ausgeschaltet worden sein.
+  if (!state.strassen.visible) return;
+  state.strassen.group.addTo(state.map);
+  refreshStrassenLabels();
+  renderLegend();
+}
+
+// Einmaliges, verzögertes Laden; parallele Aufrufe teilen sich dasselbe Promise.
+function loadStrassenData() {
+  if (state.strassen.features.length) return Promise.resolve(true);
+  if (!state.strassen.loading) {
+    state.strassen.loading = fetch(STRASSEN_DATA_URL)
+      .then(response => { if (!response.ok) throw new Error(`Status ${response.status}`); return response.json(); })
+      .then(data => {
+        const strassen = (Array.isArray(data?.features) ? data.features : []).map(prepareStrasse).filter(Boolean);
+        // Wichtige Straßen zuerst: sie belegen die Rasterzellen vor den Ortsstraßen.
+        strassen.sort((a, b) => a.rang - b.rang);
+        state.strassen.features = strassen;
+        return strassen.length > 0;
+      })
+      .catch(() => false)
+      .finally(() => { state.strassen.loading = null; });
+  }
+  return state.strassen.loading;
+}
+
+// GeoJSON-Linie in ein schlankes Objekt mit Bezeichnung, Punkten und Umring.
+function prepareStrasse(feature) {
+  const koordinaten = feature?.geometry?.coordinates;
+  if (feature?.geometry?.type !== 'LineString' || !Array.isArray(koordinaten) || koordinaten.length < 2) return null;
+  const punkte = [];
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const eintrag of koordinaten) {
+    const lng = Number(eintrag?.[0]);
+    const lat = Number(eintrag?.[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    punkte.push([lat, lng]);
+    minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat);
+    minLng = Math.min(minLng, lng); maxLng = Math.max(maxLng, lng);
+  }
+  if (punkte.length < 2) return null;
+  const properties = feature.properties || {};
+  const ref = String(properties.ref || '').trim();
+  const name = String(properties.name || '').trim();
+  const kennung = ref.charAt(0).toUpperCase();
+  const art = STRASSEN_ARTEN[kennung] ? kennung : null;
+  const text = (art ? ref : name || ref).slice(0, 60);
+  if (!text) return null;
+  return {
+    text, punkte, art,
+    minZoom: art ? STRASSEN_ARTEN[art].zoom : STRASSEN_NAME_ZOOM,
+    rang: art ? STRASSEN_ARTEN[art].rang : 9,
+    minLat, maxLat, minLng, maxLng
+  };
+}
+
+// Kompletter Neuaufbau je Kartenausschnitt: nur sichtbare Straßen, gestaffelt
+// nach Zoomstufe und ausgedünnt über das Bildschirmraster.
+function refreshStrassenLabels() {
+  const strassen = state.strassen;
+  if (!state.map || !strassen.group || !strassen.visible) return;
+  strassen.group.clearLayers();
+  if (!strassen.features.length) return;
+  const zoom = state.map.getZoom();
+  const bounds = state.map.getBounds().pad(0.15);
+  const kandidaten = [];
+  let linien = 0;
+  for (const strasse of strassen.features) {
+    if (zoom < strasse.minZoom || !strasseInBounds(strasse, bounds)) continue;
+    // Dezente Linie nur für nummerierte Straßen, damit der Verlauf erkennbar ist.
+    if (strasse.art && linien < STRASSEN_MAX_LINIEN) {
+      L.polyline(strasse.punkte, strassenLinienStil(strasse.art)).addTo(strassen.group);
+      linien++;
+    }
+    if (kandidaten.length >= STRASSEN_MAX_KANDIDATEN) continue;
+    const anker = strassenAnker(strasse, bounds);
+    if (anker) kandidaten.push({ strasse, anker, punkt: state.map.latLngToContainerPoint(anker) });
+  }
+  for (const kandidat of waehleStrassenLabels(kandidaten)) {
+    L.marker(kandidat.anker, { icon: strassenIcon(kandidat.strasse), interactive: false, keyboard: false, pane: 'strassenPane' }).addTo(strassen.group);
+  }
+}
+
+function strasseInBounds(strasse, bounds) {
+  const southWest = bounds.getSouthWest();
+  const northEast = bounds.getNorthEast();
+  return strasse.maxLat >= southWest.lat && strasse.minLat <= northEast.lat
+    && strasse.maxLng >= southWest.lng && strasse.minLng <= northEast.lng;
+}
+
+// Beschriftet wird die Mitte eines Segments, das im Ausschnitt liegt.
+function strassenAnker(strasse, bounds) {
+  const mitten = [];
+  for (let i = 1; i < strasse.punkte.length; i++) {
+    const mitte = [(strasse.punkte[i - 1][0] + strasse.punkte[i][0]) / 2, (strasse.punkte[i - 1][1] + strasse.punkte[i][1]) / 2];
+    if (bounds.contains(mitte)) mitten.push(mitte);
+  }
+  if (mitten.length) return mitten[Math.floor(mitten.length / 2)];
+  return strasse.punkte.find(punkt => bounds.contains(punkt)) || null;
+}
+
+function strassenZelle(punkt, groesse = STRASSEN_RASTER) {
+  return `${Math.floor(punkt.x / groesse)}:${Math.floor(punkt.y / groesse)}`;
+}
+
+// Ausdünnung: pro Rasterzelle höchstens ein Label, in Reihenfolge der Kandidaten
+// (nach Rang sortiert). So gewinnen A und B vor Ortsstraßennamen.
+function waehleStrassenLabels(kandidaten, maxLabels = STRASSEN_MAX_LABELS) {
+  const belegt = new Set();
+  const gewaehlt = [];
+  for (const kandidat of kandidaten) {
+    if (gewaehlt.length >= maxLabels) break;
+    const zelle = strassenZelle(kandidat.punkt);
+    if (belegt.has(zelle)) continue;
+    belegt.add(zelle);
+    gewaehlt.push(kandidat);
+  }
+  return gewaehlt;
+}
+
+function strassenLinienStil(art) {
+  const info = STRASSEN_ARTEN[art];
+  return { color: info.farbe, weight: info.gewicht, opacity: 0.38, lineCap: 'round', lineJoin: 'round', smoothFactor: 2, interactive: false, pane: 'strassenPane' };
+}
+
+function strassenIcon(strasse) {
+  const html = strasse.art
+    ? `<span class="strassen-badge ${STRASSEN_ARTEN[strasse.art].klasse}">${escapeHtml(strasse.text)}</span>`
+    : `<span class="strassen-name">${escapeHtml(strasse.text)}</span>`;
+  return L.divIcon({ className: 'strassen-label', iconSize: null, html });
+}
+
+function strassenLegendItem() {
+  const item = document.createElement('div');
+  item.className = 'legend-item strassen-legend';
+  const title = document.createElement('strong');
+  title.textContent = 'Straßenbezeichnungen';
+  item.append(title);
+  for (const art of ['A', 'B', 'L']) {
+    const info = STRASSEN_ARTEN[art];
+    const row = document.createElement('div');
+    row.className = 'strassen-legend-row';
+    const badge = document.createElement('span');
+    badge.className = `strassen-badge ${info.klasse}`;
+    badge.textContent = info.beispiel;
+    const text = document.createElement('span');
+    text.textContent = art === 'L' ? 'Landes- und Kreisstraße' : info.name;
+    row.append(badge, text);
+    item.append(row);
+  }
+  const note = document.createElement('small');
+  note.textContent = 'Ortsstraßennamen erscheinen ab Zoomstufe 15 als dunkler Text mit weißem Rand.';
+  item.append(note);
+  return item;
+}
+
 // ── Wind und Wetter (Open-Meteo, ohne API-Schlüssel) ───────────────────────
 const WEATHER_STORAGE = 'navlog-ipad-weather';
 
@@ -1261,6 +2645,7 @@ function toggleWeather() {
     $('weatherBox').hidden = false;
     $('weatherButton').setAttribute('aria-expanded', 'true');
     closePanel();
+    closeAppMenu();
     const cached = loadWeatherCache();
     if (cached) renderWeather(cached, true);
     refreshWeather();
@@ -1376,10 +2761,15 @@ function setStatus(text) { $('status').textContent = text; }
 let toastTimer;
 function toast(text) { clearTimeout(toastTimer); $('toast').textContent = text; $('toast').classList.add('show'); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 4200); }
 function escapeHtml(text) { const node = document.createElement('span'); node.textContent = text; return node.innerHTML; }
+// Für Attributwerte reicht escapeHtml nicht: Anführungszeichen bleiben dort
+// stehen und würden ein Attribut vorzeitig schließen (JSON besteht daraus).
+function escapeAttribute(text) { return escapeHtml(text).replace(/"/g, '&quot;'); }
 
 window.addEventListener('beforeprint', () => {
   renderLegend();
   state.map?.invalidateSize(false);
+  // Der Druckausschnitt ist schmaler – Schilder für die neue Größe neu setzen.
+  refreshStrassenLabels();
 });
 window.addEventListener('afterprint', () => setTimeout(() => state.map?.invalidateSize(false), 50));
 

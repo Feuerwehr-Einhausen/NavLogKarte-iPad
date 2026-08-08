@@ -18,8 +18,12 @@ Die Oberfläche kann für eine Organisation mit eigenem Namen, Logo, Startgebiet
 - QR-Code zur Übergabe eines Ziels an eine Navigations-App
 - Messwerkzeuge: Strecken (mit B-Schlauch-Umrechnung), Flächen und Absperrkreise mit Radien-Vorwahl nach FwDV 500; Messungen bleiben lokal gespeichert
 - taktische Zeichen für Waldbrandeinsätze (Lage inkl. Ankerpunkt und Lookout, Führung, Kräfte, Wasser) mit Beschriftung, drehbarem Ausbreitungspfeil samt Richtungsvorschau und nachträglicher Bearbeitung; getrennt von den Messwerkzeugen
+- eigener Layer „Waldbrand POI FFEH“ für den Punktbestand der Feuerwehr Einhausen mit Kategorien, Statusbewertung (offen, brauchbar, eingeschränkt, unbrauchbar, nicht auffindbar) und Export/Import als GeoJSON, um die Erkundungsergebnisse mehrerer Geräte zusammenzuführen
+- Erkundungsmodus für Wasserentnahmestellen: Bewertung eines NavLog-POI aus der Symbolinformation heraus, einer beliebigen Kartenstelle oder der eigenen GPS-Position, mit gemerktem Prüfernamen, Fortschrittsanzeige und Filter auf die noch offenen Punkte
+- zuschaltbarer Layer „Straßenbezeichnungen“ aus OpenStreetMap-Daten mit Nummernschildern für Autobahnen, Bundes-, Landes- und Kreisstraßen sowie Ortsstraßennamen ab Zoomstufe 15; die Datenbasis liegt im Repository und lässt sich mit `scripts/generate-strassen.mjs` neu erzeugen
 - Wind- und Wetteranzeige für die Kartenmitte mit Windpfeil auf der Karte, 12-Stunden-Windvorhersage und Hinweis auf angekündigte Winddrehungen (Open-Meteo, ohne API-Schlüssel)
 - Maßstabsleiste
+- ein- und ausklappbare Legende der aktiven Layer direkt auf der Karte (Knopf am linken Kartenrand, Zustand bleibt gemerkt)
 - speicherbare Startansicht und Layerauswahl
 - Druckansicht mit Legende (inklusive eingezeichneter Messungen und Absperrbereiche)
 - touchgerechte Bedienung und Unterstützung der iPad-Safe-Areas
@@ -66,6 +70,7 @@ Danach `http://localhost:8080` im Browser öffnen. Die produktive Installation a
 - mgrs 2.1.0 – MIT
 - QRCode.js 1.0.0 – MIT
 - OpenStreetMap/Nominatim – externe Karten- und Suchdienste mit eigenen Nutzungsbedingungen
+- OpenStreetMap-Mitwirkende – Datengrundlage des Layers „Straßenbezeichnungen“ (`wwwroot/data/strassen.geojson`, erzeugt mit `scripts/generate-strassen.mjs` über die Overpass-API), lizenziert unter ODbL 1.0
 - Open-Meteo – Wetterdaten (CC BY 4.0), Abruf ohne API-Schlüssel direkt vom Browser
 - „Taktische Zeichen“ von Jonas Köritz – Symbolgrafiken (CC BY 4.0); Details in [wwwroot/vendor/taktische-zeichen/LIZENZ.md](wwwroot/vendor/taktische-zeichen/LIZENZ.md)
 

@@ -1,0 +1,8 @@
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+	<title>Löschteich (offenes Gewässer)</title>
+	<rect x="14" y="62" width="228" height="132" rx="18" fill="#003399"/>
+	<path d="M46,98 q20,-16 40,0 t40,0 t40,0 t40,0" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+	<path d="M46,134 q20,-16 40,0 t40,0 t40,0 t40,0" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+	<path d="M46,170 q20,-16 40,0 t40,0 t40,0 t40,0" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+</svg>

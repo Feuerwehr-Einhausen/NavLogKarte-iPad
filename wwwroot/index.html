@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260725-19">
+  <link rel="stylesheet" href="app.css?v=20260808-20">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -29,6 +29,11 @@
         <button id="layersButton" class="icon-button" type="button" aria-controls="panel" aria-expanded="false">Layer</button>
       </div>
     </header>
+
+    <!-- Steht außerhalb des Menüs: Der Dateidialog wird geöffnet, während das
+         Menü bereits zugeht – ein Feld in einem ausgeblendeten Zweig wäre heikel. -->
+    <label class="sr-only" for="ffehImportInput">GeoJSON-Datei mit FFEH-Punkten</label>
+    <input id="ffehImportInput" class="sr-only" type="file" accept=".geojson,.json,application/geo+json,application/json">
 
     <section id="searchBox" class="search-box" hidden aria-label="Kartensuche">
       <form id="searchForm" class="search-form">
@@ -47,10 +52,23 @@
       <button id="homeButton" type="button" title="Zum Startgebiet zurück">⌂<span>Start</span></button>
       <button id="measureButton" type="button" title="Strecken, Flächen und Absperrbereiche messen" aria-controls="measureBar" aria-expanded="false">⊿<span>Messen</span></button>
       <button id="signsButton" type="button" title="Taktische Zeichen setzen" aria-controls="signBar" aria-expanded="false">⚑<span>Zeichen</span></button>
+      <button id="ffehButton" type="button" title="Eigene FFEH-Punkte erfassen und bearbeiten" aria-controls="ffehBar" aria-expanded="false">⌖<span>POI</span></button>
       <button id="weatherButton" type="button" title="Wind und Wetter für die Kartenmitte" aria-controls="weatherBox" aria-expanded="false">☁<span>Wetter</span></button>
       <button id="printButton" type="button" title="Karte mit Legende drucken">▣<span>Drucken</span></button>
       <button id="fullscreenButton" type="button" title="Vollbild umschalten">⛶<span>Vollbild</span></button>
     </nav>
+
+    <button id="legendButton" class="legend-button" type="button" title="Legende der aktiven Layer ein- und ausblenden" aria-controls="legendOverlay" aria-expanded="false" aria-label="Legende anzeigen"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.4 4.6a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Zm0 5.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Zm0 5.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10 6.3h9.6M10 12h9.6M10 17.7h9.6"/></svg></button>
+
+    <aside id="legendOverlay" class="legend-overlay" hidden aria-label="Legende der aktiven Layer">
+      <div class="measure-header">
+        <strong>Legende aktiver Layer</strong>
+        <div class="sheet-header-actions">
+          <button id="legendClose" type="button" class="close-button" aria-label="Legende schließen">×</button>
+        </div>
+      </div>
+      <div id="legendOverlayList" class="legend-list"></div>
+    </aside>
 
     <section id="measureBar" class="measure-bar" hidden aria-label="Messwerkzeuge">
       <div class="measure-header">
@@ -105,6 +123,45 @@
       <p id="signHint" class="measure-hint">Zeichen wählen und auf der Karte platzieren.</p>
     </section>
 
+    <section id="ffehBar" class="ffeh-bar" hidden aria-label="FFEH-Punkte">
+      <div class="measure-header">
+        <strong>FFEH-Punkte</strong>
+        <div class="sheet-header-actions">
+          <button id="ffehCollapse" type="button" class="sheet-toggle" aria-controls="ffehBar" aria-expanded="true" aria-label="FFEH-Punkte einklappen"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+          <button id="ffehClose" type="button" class="close-button" aria-label="FFEH-Punkte schließen">×</button>
+        </div>
+      </div>
+      <div class="ffeh-progress-row">
+        <p id="ffehProgress" class="ffeh-progress" aria-live="polite">Noch keine Punkte erfasst.</p>
+        <label class="ffeh-filter-toggle"><input id="ffehOpenOnlyToggle" type="checkbox"><span>Nur offene zeigen</span></label>
+      </div>
+      <div id="ffehPalette" class="ffeh-palette" role="group" aria-label="Kategorie wählen"></div>
+      <p id="ffehCategoryNote" class="ffeh-category-note" aria-live="polite" hidden>NavLog-Symbol – Kategorie wird nicht überzeichnet.</p>
+      <div class="ffeh-options">
+        <label class="sign-label-field">Name<input id="ffehNameInput" maxlength="60" placeholder="z. B. Zisterne Forstwiesenschneise" autocomplete="off"></label>
+        <label class="sign-label-field">Beschreibung (optional)<input id="ffehDescriptionInput" maxlength="200" placeholder="z. B. Saugstelle, Zufahrt über Waldweg" autocomplete="off"></label>
+        <div class="ffeh-field-pair">
+          <label>Status<select id="ffehStatusSelect"></select></label>
+          <label>Mit LF anfahrbar<select id="ffehAccessSelect">
+            <option value="">unbekannt</option>
+            <option value="ja">ja</option>
+            <option value="nein">nein</option>
+          </select></label>
+        </div>
+        <label class="sign-label-field">Geprüft von (optional)<input id="ffehCheckerInput" maxlength="40" placeholder="z. B. Kürzel" autocomplete="off"></label>
+        <label>Quelle<select id="ffehSourceSelect" aria-describedby="ffehSourceHint"></select></label>
+        <small id="ffehSourceHint" class="ffeh-source-hint">Wurde der Punkt aus einer Symbolinformation heraus bewertet, steht die Quelle auf „NavLog-Symbol (bewertet)“: Die Karte legt dann nur einen farbigen Statusring um das Originalsymbol und überzeichnet die Kategorie nicht. Passt das nicht, hier auf „In der Karte erfasst“ umstellen.</small>
+      </div>
+      <div id="ffehIdleActions" class="measure-actions">
+        <button id="ffehLocateAdd" type="button" title="Punkt an der eigenen GPS-Position anlegen und bewerten">⌖ An meiner Position anlegen</button>
+      </div>
+      <div id="ffehEditActions" class="measure-actions ffeh-edit-actions" hidden>
+        <button id="ffehFinishEdit" type="button" class="ffeh-finish-button" title="Bearbeitung beenden, Stand behalten und Werkzeug schließen">✓ Fertig</button>
+        <button id="ffehCancelEdit" type="button" title="Änderungen an diesem Punkt verwerfen und Werkzeug schließen">Abbrechen</button>
+      </div>
+      <p id="ffehHint" class="measure-hint">Kategorie wählen und auf die Karte tippen.</p>
+    </section>
+
     <section id="weatherBox" class="weather-box" hidden aria-label="Wind und Wetter">
       <div class="weather-header">
         <h2>Wind &amp; Wetter</h2>
@@ -127,35 +184,47 @@
     </aside>
 
     <aside id="panel" class="panel" aria-hidden="true" aria-label="Karteneinstellungen">
-      <div class="panel-header"><h2>Layer & Einstellungen</h2><button id="closePanel" class="close-button" type="button" aria-label="Schließen">×</button></div>
+      <div class="panel-header">
+        <h2>Layer & Einstellungen</h2>
+        <div class="panel-header-actions">
+          <button id="menuButton" class="close-button panel-menu-button" type="button" aria-controls="appMenu" aria-expanded="false" aria-haspopup="menu" aria-label="Weitere Funktionen" title="Weitere Funktionen"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z"/></svg></button>
+          <button id="closePanel" class="close-button" type="button" aria-label="Schließen">×</button>
+        </div>
+      </div>
+      <!-- Verwaltungsfunktionen: kompaktes Dropdown hinter dem ⋮-Knopf. Ein
+           neuer Eintrag ist eine Zeile Markup. -->
+      <div id="appMenu" class="app-menu" hidden>
+        <div class="app-menu-list" role="menu" aria-label="Verwaltung">
+          <button id="ffehExport" class="app-menu-item" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11m0-11 4 4m-4-4-4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>FFEH-Punkte exportieren<small>Alle Punkte dieses Geräts als Datei zum Weitergeben.</small></span></button>
+          <button id="ffehImport" class="app-menu-item" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 14V3m0 11 4-4m-4 4-4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>FFEH-Punkte importieren<small>Datei eines anderen Geräts mit dem eigenen Bestand zusammenführen.</small></span></button>
+          <button id="openSettingsDialog" class="app-menu-item" type="button" role="menuitem" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m4 11 8-6.5 8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/></svg><span>Startansicht bearbeiten<small>Titel und Kartenausschnitt festlegen, auf den die App startet.</small></span></button>
+          <button id="resetAccessButton" class="app-menu-item" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.5 12a3.5 3.5 0 1 1-3.5-3.5A3.5 3.5 0 0 1 8.5 12Zm0 0H20m-3.5 0v3.2M20 12v2.4"/></svg><span>NavLog-Zugang ändern<small>Kunden-ID auf diesem Gerät löschen und neu eingeben.</small></span></button>
+        </div>
+        <footer class="app-menu-footer">
+          <span>NavLog Waldbrandkarte <span id="appVersion"></span></span>
+          <span>© 2026 Feuerwehr Einhausen</span>
+          <span class="disclaimer">Kein offizielles NavLog-Produkt – internes Projekt der Feuerwehr Einhausen auf Basis der NavLog-Karten.</span>
+        </footer>
+      </div>
       <div class="panel-content">
         <div class="layer-actions" aria-label="Layer schnell schalten">
           <button id="allLayersOff" type="button">Alles aus</button>
           <button id="restoreStartView" class="start-view-button" type="button">Startansicht</button>
         </div>
         <div class="layer-symbol-key" aria-label="Bedeutung der Layersymbole">
-          <span><span class="layer-icon background" aria-hidden="true">▱</span>Hintergrund</span>
-          <span><span class="layer-icon points" aria-hidden="true">●</span>Punkte</span>
-          <span><span class="layer-icon routes" aria-hidden="true">⌁</span>Wege</span>
+          <!-- Die Symbole werden beim Start aus layerIconSvg() gefüllt und sind
+               damit immer identisch mit den Symbolen in der Layerliste. -->
+          <span><span class="layer-icon background" data-layer-kind="background" aria-hidden="true"></span>Hintergrund</span>
+          <span><span class="layer-icon points" data-layer-kind="points" aria-hidden="true"></span>Punkte</span>
+          <span><span class="layer-icon routes" data-layer-kind="routes" aria-hidden="true"></span>Wege</span>
+          <span><span class="layer-icon thematic" data-layer-kind="thematic" aria-hidden="true"></span>Sonstige</span>
         </div>
         <label class="switch-row"><input id="osmToggle" type="checkbox" checked><span class="layer-icon background" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m3 5 5-2 8 3 5-2v15l-5 2-8-3-5 2V5Zm5-2v15m8-12v15"/></svg></span><span>OpenStreetMap Hintergrund</span></label>
+        <section><h3>Eigene Layer</h3>
+          <label class="switch-row"><input id="ffehToggle" type="checkbox" checked><span class="layer-icon points" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></span><span>Waldbrand POI FFEH</span></label>
+          <label class="switch-row"><input id="strassenToggle" type="checkbox"><span class="layer-icon routes" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 4v4c0 3 3 3 3 6v6m11-16v5c0 3-6 3-6 6v5M3 4h4m10 0h4M6 20h4m1 0h4"/></svg></span><span>Straßenbezeichnungen</span></label>
+        </section>
         <section><h3>NavLog-Layer</h3><div id="layerList" class="layer-list"><p class="muted">Layer werden geladen …</p></div></section>
-        <section><h3>Legende aktiver Layer</h3><div id="legendList" class="legend-list"><p class="muted">Noch kein Layer aktiviert.</p></div></section>
-        <details>
-          <summary>Startansicht bearbeiten</summary>
-          <form id="settingsForm" class="settings-form">
-            <label>Titel<input id="settingTitle" maxlength="80"></label>
-            <div class="field-pair"><label>Breitengrad<input id="settingLat" type="number" step="any" min="-90" max="90"></label><label>Längengrad<input id="settingLon" type="number" step="any" min="-180" max="180"></label></div>
-            <label>Zoom<input id="settingZoom" type="number" min="3" max="20"></label>
-            <button class="primary-button" type="submit">Aktuelle Ansicht speichern</button>
-            <button id="resetAccessButton" class="secondary-button" type="button">NavLog-Zugang ändern</button>
-          </form>
-        </details>
-        <footer class="panel-footer">
-          <span>NavLog Waldbrandkarte <span id="appVersion"></span></span>
-          <span>© 2026 Feuerwehr Einhausen</span>
-          <span class="disclaimer">Kein offizielles NavLog-Produkt – internes Projekt der Feuerwehr Einhausen auf Basis der NavLog-Karten.</span>
-        </footer>
       </div>
     </aside>
     <div id="backdrop" class="backdrop" hidden></div>
@@ -170,6 +239,19 @@
       <label>NavLog-Kunden-ID<input id="kidInput" type="password" autocomplete="off" required maxlength="256"></label>
       <button class="primary-button" type="submit">Verbindung einrichten</button>
       <p id="setupError" class="error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <button id="closeSettingsDialog" class="close-button settings-close" type="button" aria-label="Startansicht schließen">×</button>
+    <form id="settingsForm" class="settings-form">
+      <div class="dialog-badge">Startansicht</div>
+      <h2>Startansicht bearbeiten</h2>
+      <p class="setup-note">Gespeichert wird der Kartenausschnitt, der gerade zu sehen ist, samt der aktiven Layer. Die Felder zeigen den zuletzt gespeicherten Stand.</p>
+      <label>Titel<input id="settingTitle" maxlength="80"></label>
+      <div class="field-pair"><label>Breitengrad<input id="settingLat" type="number" step="any" min="-90" max="90"></label><label>Längengrad<input id="settingLon" type="number" step="any" min="-180" max="180"></label></div>
+      <label>Zoom<input id="settingZoom" type="number" min="3" max="20"></label>
+      <button class="primary-button" type="submit">Aktuelle Ansicht speichern</button>
     </form>
   </dialog>
 
@@ -199,6 +281,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260725-19"></script>
+  <script src="app.js?v=20260808-20"></script>
 </body>
 </html>

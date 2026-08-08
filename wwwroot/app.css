@@ -2,7 +2,7 @@
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
 html, body { width:100%; height:100%; margin:0; overflow:hidden; background:#e7e3da; color:var(--ink); }
-button, input, summary { font:inherit; touch-action:manipulation; }
+button, input { font:inherit; touch-action:manipulation; }
 button { min-width:48px; min-height:48px; cursor:pointer; }
 .app-shell { position:relative; width:100%; height:100vh; height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .topbar { position:absolute; z-index:900; top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left)); right:calc(10px + env(safe-area-inset-right)); min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 8px 7px 10px; border:1px solid rgb(255 255 255 / .7); border-radius:14px; background:rgb(255 255 255 / .94); box-shadow:0 4px 18px rgb(0 0 0 / .16); backdrop-filter:blur(12px); }
@@ -21,10 +21,31 @@ button { min-width:48px; min-height:48px; cursor:pointer; }
 .search-result { min-height:48px; border:0; border-top:1px solid var(--line); background:transparent; padding:9px 5px; text-align:left; line-height:1.3; }
 .search-result:hover { background:#f2eee6; }
 .search-box small { display:block; margin-top:7px; color:#6c716d; }
+/* Verwaltungs-Dropdown: dezenter ⋮-Knopf im Panel-Kopf, Menü als kompakte
+   Karte direkt darunter im Panel. */
+.panel-header-actions { display:flex; align-items:center; gap:4px; }
+.panel-menu-button { display:grid; place-items:center; }
+.panel-menu-button svg { width:22px; height:22px; display:block; }
+.panel-menu-button[aria-expanded="true"] { background:#e2ddd3; }
+.app-menu { position:absolute; z-index:5; top:60px; right:10px; width:min(330px, calc(100% - 20px)); max-height:min(72dvh, calc(100% - 80px)); overflow-y:auto; overscroll-behavior:contain; padding:8px; border:1px solid var(--line); border-radius:12px; background:white; box-shadow:0 8px 26px rgb(0 0 0 / .22); }
+.app-menu-list { display:grid; gap:3px; }
+.app-menu-item { min-height:56px; display:grid; grid-template-columns:24px minmax(0, 1fr); align-items:center; gap:12px; border:0; border-radius:10px; background:transparent; color:var(--ink); padding:8px 10px; text-align:left; }
+.app-menu-item:hover { background:#eeeae2; }
+.app-menu-item svg { width:23px; height:23px; display:block; color:var(--fire); }
+.app-menu-item span { display:block; font-size:14px; font-weight:750; line-height:1.25; }
+.app-menu-item small { display:block; margin-top:2px; color:#6c716d; font-size:11px; font-weight:400; line-height:1.35; }
+.app-menu-footer { margin-top:6px; padding:11px 10px 4px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:2px; color:#8a8f8a; font-size:11px; line-height:1.5; }
+.app-menu-footer .disclaimer { margin-top:6px; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .map-tools { position:absolute; z-index:800; right:calc(12px + env(safe-area-inset-right)); bottom:calc(14px + env(safe-area-inset-bottom)); display:flex; gap:8px; }
 .map-tools button { border:1px solid rgb(255 255 255 / .8); border-radius:12px; background:rgb(255 255 255 / .95); box-shadow:0 3px 12px rgb(0 0 0 / .18); color:var(--ink); font-size:21px; font-weight:800; padding:4px 10px; }
 .map-tools button span { display:block; font-size:10px; font-weight:700; }
+/* Legende als Kartenüberlagerung: Knopf am linken Rand unter dem Zoom-Control,
+   Panel links andockend. Die Karte bleibt daneben bedienbar. */
+.legend-button { position:absolute; z-index:800; left:calc(10px + env(safe-area-inset-left)); bottom:calc(14px + env(safe-area-inset-bottom)); width:48px; min-width:48px; height:48px; display:grid; place-items:center; border:1px solid rgb(255 255 255 / .8); border-radius:12px; background:rgb(255 255 255 / .95); box-shadow:0 3px 12px rgb(0 0 0 / .18); color:var(--ink); padding:0; }
+.legend-button svg { width:26px; height:26px; display:block; }
+.legend-button[aria-expanded="true"] { border-color:var(--fire); background:var(--fire); color:white; }
+.legend-overlay { position:absolute; z-index:830; left:calc(10px + env(safe-area-inset-left)); top:calc(78px + env(safe-area-inset-top)); width:min(300px, calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right))); max-height:calc(100dvh - 260px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; display:grid; gap:8px; align-content:start; padding:10px; border:1px solid rgb(255 255 255 / .8); border-radius:14px; background:rgb(255 255 255 / .96); box-shadow:0 5px 20px rgb(0 0 0 / .2); }
 .print-legend { display:none; }
 .print-legend-header { display:flex; align-items:center; gap:9px; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--fire); }
 .print-legend-header img { width:42px; height:42px; object-fit:contain; }
@@ -60,11 +81,7 @@ button { min-width:48px; min-height:48px; cursor:pointer; }
 .legend-item img { display:block; max-width:100%; height:auto; }
 .legend-item .error { margin:0; }
 .muted { color:#6c716d; }
-.panel-footer { margin-top:18px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:2px; color:#8a8f8a; font-size:11px; line-height:1.5; }
-.panel-footer .disclaimer { margin-top:6px; }
 .setup-note { margin:0; font-size:12px; line-height:1.5; color:#6c716d; }
-details { margin-top:20px; border-top:1px solid var(--line); padding-top:8px; }
-summary { min-height:48px; display:flex; align-items:center; font-weight:750; cursor:pointer; }
 .settings-form, dialog form { display:grid; gap:14px; }
 label { display:grid; gap:6px; font-size:13px; font-weight:700; }
 input { width:100%; min-height:48px; border:1px solid #aaa89f; border-radius:9px; background:white; color:var(--ink); padding:9px 11px; font-size:16px; }
@@ -89,13 +106,17 @@ dialog p { margin:0; line-height:1.45; }
 .qr-dialog-content { position:relative; width:min(390px, calc(100vw - 28px)); display:grid; justify-items:center; gap:12px; padding:24px; text-align:center; }
 .qr-dialog-content h2, .qr-dialog-content p { margin:0; }
 .qr-close { position:absolute; top:8px; right:8px; }
+/* Das × liegt über dem Formular; der modale Dialog ist sein Bezugsrahmen. */
+.settings-dialog h2 { margin:0; font-size:21px; }
+.settings-close { position:absolute; top:8px; right:8px; }
 .qr-code { width:256px; height:256px; display:grid; place-items:center; margin:5px auto; padding:8px; border:1px solid var(--line); background:white; }
 .qr-code img, .qr-code canvas { display:block; width:240px !important; height:240px !important; image-rendering:pixelated; }
 .qr-coordinates { padding:8px 12px; border-radius:9px; background:#eeeae2; font-size:13px; line-height:1.45; }
 .qr-link { min-height:48px; display:flex; align-items:center; justify-content:center; color:white; text-decoration:none; }
 .toast { position:absolute; z-index:1500; left:50%; bottom:calc(84px + env(safe-area-inset-bottom)); transform:translate(-50%, 18px); max-width:min(480px, calc(100vw - 24px)); padding:11px 14px; border-radius:10px; background:#202521; color:white; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:.18s ease; text-align:center; }
 .toast.show { opacity:1; transform:translate(-50%, 0); }
-.leaflet-top.leaflet-left { top:auto; bottom:calc(14px + env(safe-area-inset-bottom)); }
+/* Linke Spalte von unten nach oben: Legenden-Knopf, Zoom, Maßstab. */
+.leaflet-top.leaflet-left { top:auto; bottom:calc(72px + env(safe-area-inset-bottom)); }
 .leaflet-control-zoom { margin-top:0 !important; margin-bottom:0 !important; }
 .leaflet-control-attribution { font-size:9px; }
 .feature-info { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); line-height:1.35; }
@@ -111,9 +132,9 @@ dialog p { margin:0; line-height:1.45; }
 .feature-row.important span { display:block; color:#8b171a; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
 .feature-row.important strong { display:block; margin-top:2px; font-size:16px; }
 .feature-info small { display:block; margin-top:5px; color:#686e69; }
-.leaflet-bottom.leaflet-left { bottom:calc(96px + env(safe-area-inset-bottom)); }
+.leaflet-bottom.leaflet-left { bottom:calc(154px + env(safe-area-inset-bottom)); }
 .leaflet-control-scale-line { background:rgb(255 255 255 / .85); }
-.measure-bar, .sign-bar { position:absolute; z-index:820; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 24px)); display:grid; gap:8px; padding:10px; border:1px solid rgb(255 255 255 / .8); border-radius:14px; background:rgb(255 255 255 / .96); box-shadow:0 5px 20px rgb(0 0 0 / .2); }
+.measure-bar, .sign-bar, .ffeh-bar { position:absolute; z-index:820; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 24px)); display:grid; gap:8px; padding:10px; border:1px solid rgb(255 255 255 / .8); border-radius:14px; background:rgb(255 255 255 / .96); box-shadow:0 5px 20px rgb(0 0 0 / .2); }
 .measure-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .measure-header strong { font-size:14px; }
 .sheet-header-actions { display:flex; align-items:center; gap:4px; }
@@ -133,6 +154,14 @@ dialog p { margin:0; line-height:1.45; }
 .measure-hint { margin:0; min-height:18px; color:#444a45; font-size:13px; font-weight:700; }
 .measure-vertex { border-radius:50%; border:3px solid white; background:var(--fire); box-shadow:0 1px 6px rgb(0 0 0 / .4); cursor:move !important; }
 .measure-label { font-weight:800; }
+/* Am Desktop hat praktisch jeder Kartenklick eine Funktion (Koordinaten- und
+   Symbolabfrage), deshalb zeigt der Zeiger die Hand statt des Greifers. Beim
+   tatsächlichen Ziehen bleibt die greifende Hand. Die Werkzeugmodi weiter
+   unten haben Vorrang und behalten ihr Fadenkreuz. */
+@media (hover:hover) and (pointer:fine) {
+  .leaflet-container.leaflet-grab { cursor:pointer; }
+  .leaflet-dragging .leaflet-container.leaflet-grab, .leaflet-dragging .leaflet-container.leaflet-grab .leaflet-interactive { cursor:grabbing; }
+}
 .leaflet-container.measuring, .leaflet-container.measuring .leaflet-interactive { cursor:crosshair; }
 .leaflet-dragging .leaflet-container.measuring { cursor:grabbing; }
 .sign-palette { display:grid; gap:4px; max-height:min(300px, 32dvh); overflow-y:auto; overscroll-behavior:contain; }
@@ -140,7 +169,7 @@ dialog p { margin:0; line-height:1.45; }
 .sign-palette-row { display:flex; flex-wrap:wrap; gap:6px; }
 .sign-symbol { width:56px; height:56px; min-width:56px; display:grid; place-items:center; border:1px solid #ccc7bd; border-radius:9px; background:white; padding:5px; }
 .sign-symbol img { width:100%; height:100%; object-fit:contain; display:block; }
-.sign-symbol.active { border-color:var(--fire); background:#f8ecec; box-shadow:0 0 0 2px var(--fire); }
+.sign-symbol.active, .ffeh-symbol-button.active { border-color:var(--fire); background:#f8ecec; box-shadow:0 0 0 2px var(--fire); }
 .sign-options { display:grid; gap:8px; }
 .sign-rotation-row { display:flex; align-items:center; gap:10px; font-size:13px; font-weight:700; }
 .sign-rotation-row input[type="range"] { flex:1; width:auto; min-height:44px; border:0; padding:0; background:transparent; accent-color:var(--fire); }
@@ -149,13 +178,114 @@ dialog p { margin:0; line-height:1.45; }
 .sign-marker { display:grid; justify-items:center; }
 .sign-marker img { width:48px; height:48px; display:block; filter:drop-shadow(0 1px 2px rgb(255 255 255 / .85)); }
 .sign-marker-label { position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:2px; white-space:nowrap; border-radius:5px; background:rgb(255 255 255 / .92); padding:1px 6px; font-size:11px; font-weight:800; box-shadow:0 1px 4px rgb(0 0 0 / .25); }
+/* Eigene FFEH-Punkte (Waldbrand POI der Feuerwehr Einhausen). */
+/* Kacheln mit Symbol und Klartext: die Kürzel allein sind nicht selbsterklärend. */
+.ffeh-palette { display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:6px; max-height:min(230px, 28dvh); overflow-y:auto; overscroll-behavior:contain; }
+.ffeh-symbol-button { min-height:76px; display:grid; grid-template-rows:32px auto; place-items:center; gap:3px; border:1px solid #ccc7bd; border-radius:9px; background:white; padding:6px 4px; }
+.ffeh-symbol-button img { width:30px; height:30px; object-fit:contain; display:block; }
+.ffeh-symbol-name { color:#3c423d; font-size:11px; font-weight:750; line-height:1.15; text-align:center; overflow-wrap:anywhere; }
+.ffeh-symbol-text { font-size:19px; font-weight:900; letter-spacing:-.03em; color:#3c423d; }
+/* Abschluss der Bearbeitung: „Fertig“ führt, „Abbrechen“ bleibt zurückhaltend. */
+.ffeh-edit-actions .ffeh-finish-button { border-color:var(--fire); background:var(--fire); color:white; font-weight:800; }
+.ffeh-edit-actions .ffeh-finish-button:hover { background:var(--fire-dark); }
+.ffeh-options { display:grid; gap:8px; }
+.ffeh-options select { width:100%; min-height:48px; border:1px solid #aaa89f; border-radius:9px; background:white; color:var(--ink); padding:9px 11px; font-size:16px; }
+.ffeh-field-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+/* Die Quelle steuert die Darstellung auf der Karte – das braucht eine Erklärung. */
+.ffeh-source-hint { display:block; margin-top:-3px; color:#6c716d; font-size:11px; line-height:1.4; }
+/* Steht anstelle der Kategorie-Palette, solange ein NavLog-Punkt bearbeitet wird. */
+.ffeh-category-note { margin:0; border:1px dashed #ccc7bd; border-radius:9px; background:#f4f1ea; padding:8px 10px; color:#4a4f4b; font-size:12px; font-weight:750; line-height:1.35; }
+/* Arbeitsliste: Fortschritt der Erkundung und Filter auf offene Punkte. */
+.ffeh-progress-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px 10px; }
+.ffeh-progress { margin:0; color:#444a45; font-size:13px; font-weight:800; }
+.ffeh-filter-toggle { min-height:44px; display:flex; align-items:center; gap:7px; font-size:12px; font-weight:750; cursor:pointer; }
+.ffeh-filter-toggle input { width:22px; height:22px; min-height:0; flex:0 0 auto; padding:0; accent-color:var(--fire); }
+/* „Punkt bewerten“ im Koordinaten-Popup (Erkundung aus NavLog-POI oder Raster). */
+.ffeh-assess-row { display:grid; gap:5px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+.ffeh-assess-button { min-height:48px; border:0; border-radius:9px; background:var(--fire); color:white; font-weight:800; padding:9px 12px; }
+.ffeh-assess-button:hover { background:var(--fire-dark); }
+.ffeh-assess-row small { color:#6c716d; font-size:11px; line-height:1.4; }
+.ffeh-marker { display:grid; justify-items:center; }
+.ffeh-symbol { position:relative; width:42px; height:42px; display:grid; place-items:center; border:3px solid var(--ffeh-status, #8a8f8a); border-radius:50%; background:rgb(255 255 255 / .94); box-shadow:0 1px 5px rgb(0 0 0 / .35); transform-origin:center; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+.ffeh-symbol img { width:26px; height:26px; display:block; }
+.ffeh-symbol .ffeh-symbol-text { font-size:15px; }
+.ffeh-symbol.missing::after { content:''; position:absolute; left:2px; right:2px; top:calc(50% - 1.5px); height:3px; border-radius:2px; background:var(--ffeh-status, #4a4f4b); transform:rotate(-45deg); }
+/* Punkte aus NavLog: zentrierter Statusring um das Rastersymbol der Karte.
+   Die Mitte bleibt vollständig frei, damit das NavLog-Original durchscheint. */
+.ffeh-ring { position:relative; width:52px; height:52px; display:block; border:5px solid var(--ffeh-status, #8a8f8a); border-radius:50%; background:none; transform-origin:center; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+.ffeh-ring-open { border-style:dashed; }
+.ffeh-ring-missing::after { content:''; position:absolute; left:-4px; right:-4px; top:calc(50% - 2.5px); height:5px; border-radius:3px; background:var(--ffeh-status, #4a4f4b); transform:rotate(-45deg); }
+/* Der gerade bearbeitete Punkt: verstärkter, pulsierender Ring als Ziehanker.
+   Beim Statusring bleibt die Statusfarbe stehen – sie wird ja gerade gesetzt. */
+.ffeh-marker.editing .ffeh-symbol { border-color:var(--fire); box-shadow:0 0 0 4px rgb(159 29 32 / .35), 0 1px 5px rgb(0 0 0 / .35); animation:ffeh-pulse 1.4s ease-in-out infinite; }
+.ffeh-marker.editing .ffeh-ring { box-shadow:0 0 0 5px rgb(159 29 32 / .35); animation:ffeh-pulse 1.4s ease-in-out infinite; }
+.ffeh-marker.editing { cursor:move; }
+@keyframes ffeh-pulse { 50% { box-shadow:0 0 0 9px rgb(159 29 32 / .18), 0 1px 5px rgb(0 0 0 / .35); } }
+@media (prefers-reduced-motion:reduce) { .ffeh-marker.editing .ffeh-symbol, .ffeh-marker.editing .ffeh-ring { animation:none; } }
+.ffeh-marker-label { position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:2px; white-space:nowrap; border-radius:5px; background:rgb(255 255 255 / .92); padding:1px 6px; font-size:11px; font-weight:800; box-shadow:0 1px 4px rgb(0 0 0 / .25); }
+/* Unter dem Statusring: Name plus Beschreibung als Hinweis, gestapelt und umbrechend. */
+.ffeh-ring-caption { position:absolute; top:100%; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; }
+.ffeh-ring-caption .ffeh-marker-label { position:static; transform:none; }
+.ffeh-marker-hint { white-space:normal; width:max-content; max-width:170px; text-align:center; font-size:10px; font-weight:600; line-height:1.25; }
+/* Zoomstufen: in der Übersicht treten die Punkte zurück, ab Zoom 16 volle Größe.
+   Skaliert wird per Transform am fertigen Marker – die Icons werden beim Zoomen
+   nie neu aufgebaut, das bleibt auf dem iPad flüssig. */
+.leaflet-container.ffeh-zoom-hidden .ffeh-marker { display:none; }
+.leaflet-container.ffeh-zoom-hidden .ffeh-marker.editing { display:grid; }
+.leaflet-container.ffeh-zoom-s .ffeh-symbol { transform:scale(.57); }
+.leaflet-container.ffeh-zoom-m .ffeh-symbol { transform:scale(.76); }
+/* Der Statusring bleibt auch klein noch antippbar und darf außen nicht unter
+   etwa 30 px fallen, sonst verschwindet er im Rastersymbol darunter und ist
+   auf dem iPad nicht mehr sicher zu treffen (52 px × .58 ≈ 30 px). */
+.leaflet-container.ffeh-zoom-s .ffeh-ring { transform:scale(.58); }
+.leaflet-container.ffeh-zoom-m .ffeh-ring { transform:scale(.78); }
+/* Ab Zoom 17 zeichnet NavLog die Rastersymbole deutlich größer – der Ring
+   wächst mit (52 px × 1.5 ≈ 78 px, × 2 ≈ 104 px), sonst liegt er im Symbol. */
+.leaflet-container.ffeh-zoom-xl .ffeh-ring { transform:scale(1.5); }
+.leaflet-container.ffeh-zoom-xxl .ffeh-ring { transform:scale(2); }
+.leaflet-container.ffeh-zoom-xl .ffeh-ring-caption { margin-top:15px; }
+.leaflet-container.ffeh-zoom-xxl .ffeh-ring-caption { margin-top:28px; }
+/* Die Bearbeitungs-Hervorhebung bleibt in jeder Stufe erkennbar. */
+.leaflet-container.ffeh-zoom-s .ffeh-marker.editing .ffeh-symbol { transform:scale(.72); }
+.leaflet-container.ffeh-zoom-m .ffeh-marker.editing .ffeh-symbol { transform:scale(.85); }
+.leaflet-container.ffeh-zoom-s .ffeh-marker.editing .ffeh-ring { transform:scale(.64); }
+.leaflet-container.ffeh-zoom-m .ffeh-marker.editing .ffeh-ring { transform:scale(.84); }
+/* Namen erst ab Zoom 14 – darunter würde die Karte zutexten. */
+.leaflet-container.ffeh-zoom-s .ffeh-marker-label, .leaflet-container.ffeh-zoom-s .ffeh-ring-caption { display:none; }
+.leaflet-container.ffeh-zoom-m .ffeh-marker-label { transform-origin:top center; transform:translateX(-50%) scale(.85); }
+.leaflet-container.ffeh-zoom-m .ffeh-ring-caption { transform-origin:top center; transform:translateX(-50%) scale(.85); }
+.leaflet-container.ffeh-zoom-m .ffeh-ring-caption .ffeh-marker-label { transform:none; }
+.ffeh-popup-rows { display:grid; gap:2px; }
+.ffeh-popup-row { display:grid; grid-template-columns:minmax(96px, 44%) 1fr; gap:8px; font-size:13px; }
+.ffeh-popup-row span { color:#606660; }
+.ffeh-popup-row strong { overflow-wrap:anywhere; }
+.ffeh-status-value { font-weight:800; }
+.ffeh-origin { font-size:11px; }
+.ffeh-legend-row { display:flex; align-items:center; gap:7px; padding:2px 0; font-size:12px; }
+.ffeh-legend-dot { position:relative; width:18px; height:18px; flex:0 0 auto; border:3px solid var(--ffeh-status, #8a8f8a); border-radius:50%; background:white; }
+.ffeh-legend-dot.missing::after { content:''; position:absolute; left:0; right:0; top:calc(50% - 1px); height:2px; background:var(--ffeh-status, #4a4f4b); transform:rotate(-45deg); }
+/* Ring-Beispiel der Legende: offen und etwas größer als der Statuspunkt –
+   so wie auf der Karte, wo der Ring das NavLog-Symbol umschließt. */
+.ffeh-legend-ring { width:22px; height:22px; flex:0 0 auto; border:3px solid var(--ffeh-status, #8a8f8a); border-radius:50%; background:none; }
+.ffeh-legend small { display:block; margin-top:5px; color:#6c716d; font-size:11px; }
+/* Straßenbezeichnungen: Nummernschilder im Stil deutscher Wegweiser sowie
+   Ortsstraßennamen mit weißem Halo. Der Layer beschriftet nur, er deckt nichts ab. */
+.strassen-label { width:0; height:0; }
+.strassen-label .strassen-badge, .strassen-label .strassen-name { position:absolute; transform:translate(-50%, -50%); }
+.strassen-badge { display:inline-block; white-space:nowrap; border-radius:4px; padding:1px 6px; font-size:12px; font-weight:900; line-height:1.4; box-shadow:0 1px 3px rgb(0 0 0 / .3); print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+.strassen-badge.autobahn { border:1px solid #0c2f61; background:#12468f; color:white; }
+.strassen-badge.bundesstrasse { border:1px solid #8a6d00; background:#f2c81e; color:#19201d; }
+.strassen-badge.landstrasse, .strassen-badge.kreisstrasse { border:1.5px solid #19201d; background:white; color:#19201d; }
+.strassen-name { display:inline-block; white-space:nowrap; color:#242a26; font-size:11px; font-weight:800; letter-spacing:.01em; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 5px #fff, 1px 1px 2px #fff, -1px -1px 2px #fff; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+.strassen-legend-row { display:flex; align-items:center; gap:8px; padding:2px 0; font-size:12px; }
+.strassen-legend small { display:block; margin-top:5px; color:#6c716d; font-size:11px; }
 .measure-popup { display:grid; gap:8px; min-width:210px; }
 .measure-popup p { margin:0; }
 .measure-popup-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.measure-edit-button, .sign-edit-button { min-height:44px; border:1px solid #aaa89f; border-radius:9px; background:white; color:var(--ink); font-weight:750; padding:8px 12px; }
-.measure-edit-button:hover, .sign-edit-button:hover { background:#f2eee6; }
-.measure-delete-button, .sign-delete-button { min-height:44px; border:0; border-radius:9px; background:var(--fire); color:white; font-weight:750; padding:8px 12px; }
-.measure-delete-button:hover, .sign-delete-button:hover { background:var(--fire-dark); }
+.measure-edit-button, .sign-edit-button, .ffeh-edit-button { min-height:44px; border:1px solid #aaa89f; border-radius:9px; background:white; color:var(--ink); font-weight:750; padding:8px 12px; }
+.measure-edit-button:hover, .sign-edit-button:hover, .ffeh-edit-button:hover { background:#f2eee6; }
+.measure-delete-button, .sign-delete-button, .ffeh-delete-button { min-height:44px; border:0; border-radius:9px; background:var(--fire); color:white; font-weight:750; padding:8px 12px; }
+.measure-delete-button:hover, .sign-delete-button:hover, .ffeh-delete-button:hover { background:var(--fire-dark); }
 .confirm-dialog form { gap:18px; }
 .confirm-dialog p { font-size:16px; font-weight:700; line-height:1.45; }
 .confirm-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -180,7 +310,7 @@ dialog p { margin:0; line-height:1.45; }
 .forecast-row { display:grid; grid-template-columns:44px 24px 1fr auto; gap:8px; align-items:center; padding:5px 4px; border-top:1px solid var(--line); font-size:13px; }
 .forecast-row.warn { border-radius:6px; background:#f8dddd; color:#8b171a; font-weight:750; }
 .weather-box small { display:block; margin-top:8px; color:#6c716d; font-size:11px; line-height:1.45; }
-@media (min-width:700px) and (min-height:520px) { .topbar { width:min(460px, calc(100% - 20px)); right:auto; } .map-tools { flex-direction:column; } .measure-bar, .sign-bar { bottom:calc(14px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 170px)); } }
+@media (min-width:700px) and (min-height:520px) { .topbar { width:min(460px, calc(100% - 20px)); right:auto; } .map-tools { flex-direction:column; } .measure-bar, .sign-bar, .ffeh-bar { bottom:calc(14px + env(safe-area-inset-bottom)); width:min(560px, calc(100vw - 170px)); } }
 
 /* Smartphone (hochkant und quer): durchgehende Werkzeugleiste unten und
    einklappbare Bedienfelder, damit die Karte zum Setzen von Punkten und
@@ -191,21 +321,39 @@ dialog p { margin:0; line-height:1.45; }
   .topbar { min-height:52px; gap:8px; padding:6px 6px 6px 8px; }
   .icon-button { padding:0 11px; font-size:14px; }
 
-  .map-tools { left:calc(8px + env(safe-area-inset-left)); right:calc(8px + env(safe-area-inset-right)); bottom:calc(8px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:2px; padding:4px; border:1px solid rgb(255 255 255 / .8); border-radius:16px; background:rgb(255 255 255 / .96); box-shadow:0 4px 18px rgb(0 0 0 / .2); }
+  .map-tools { left:calc(8px + env(safe-area-inset-left)); right:calc(8px + env(safe-area-inset-right)); bottom:calc(8px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:1px; padding:4px; border:1px solid rgb(255 255 255 / .8); border-radius:16px; background:rgb(255 255 255 / .96); box-shadow:0 4px 18px rgb(0 0 0 / .2); }
   .map-tools button { min-width:0; border:0; border-radius:12px; background:transparent; box-shadow:none; padding:4px 1px; font-size:20px; line-height:1.1; }
   .map-tools button span { margin-top:1px; font-size:9px; font-weight:800; letter-spacing:-.02em; }
   .map-tools button[aria-expanded="true"] { background:var(--fire); color:white; }
 
-  .leaflet-top.leaflet-left { bottom:calc(76px + env(safe-area-inset-bottom)); }
-  .leaflet-bottom.leaflet-left { bottom:calc(152px + env(safe-area-inset-bottom)); }
+  .legend-button { left:calc(8px + env(safe-area-inset-left)); bottom:calc(76px + env(safe-area-inset-bottom)); }
+  .leaflet-top.leaflet-left { bottom:calc(134px + env(safe-area-inset-bottom)); }
+  .leaflet-bottom.leaflet-left { bottom:calc(210px + env(safe-area-inset-bottom)); }
   .toast { bottom:calc(78px + env(safe-area-inset-bottom)); }
 
-  .measure-bar, .sign-bar { left:0; right:0; width:auto; transform:none; bottom:calc(66px + env(safe-area-inset-bottom)); max-height:56dvh; overflow-y:auto; overscroll-behavior:contain; gap:7px; border-width:1px 0 0; border-radius:16px 16px 0 0; padding:8px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left)); }
+  .measure-bar, .sign-bar, .ffeh-bar { left:0; right:0; width:auto; transform:none; bottom:calc(66px + env(safe-area-inset-bottom)); max-height:56dvh; overflow-y:auto; overscroll-behavior:contain; gap:7px; border-width:1px 0 0; border-radius:16px 16px 0 0; padding:8px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left)); }
+  /* Die Legende folgt hier dem Muster der Werkzeug-Sheets: volle Breite unten. */
+  .legend-overlay { left:0; right:0; top:auto; width:auto; bottom:calc(66px + env(safe-area-inset-bottom)); max-height:56dvh; gap:7px; border-width:1px 0 0; border-radius:16px 16px 0 0; padding:8px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left)); }
+  /* Die linke Bedienspalte liegt genau unter dem Sheet. Solange die Legende
+     offen ist, tritt sie zurück; geschlossen wird über das × im Kopf. */
+  body.legend-open .legend-button, body.legend-open .leaflet-top.leaflet-left, body.legend-open .leaflet-bottom.leaflet-left { display:none; }
   .sheet-toggle { display:grid; place-items:center; }
   .measure-bar.collapsed .measure-modes,
   .sign-bar.collapsed .sign-palette,
-  .sign-bar.collapsed .sign-options { display:none; }
+  .sign-bar.collapsed .sign-options,
+  .ffeh-bar.collapsed .ffeh-palette,
+  .ffeh-bar.collapsed .ffeh-category-note,
+  .ffeh-bar.collapsed .ffeh-options,
+  /* Eingeklappt bleibt nur der Abschluss der Bearbeitung erreichbar. */
+  .ffeh-bar.collapsed #ffehIdleActions { display:none; }
   .sign-palette { max-height:min(230px, 26dvh); }
+  .ffeh-palette { max-height:min(160px, 22dvh); grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); }
+  .ffeh-symbol-button { min-height:68px; grid-template-rows:28px auto; padding:5px 3px; }
+  .ffeh-symbol-button img { width:26px; height:26px; }
+  .ffeh-symbol-name { font-size:10px; }
+  /* Fortschritt bleibt auch eingeklappt sichtbar, braucht aber wenig Platz. */
+  .ffeh-progress { font-size:12px; }
+  .ffeh-filter-toggle { min-height:38px; }
 
   .weather-box { left:calc(10px + env(safe-area-inset-left)); max-height:calc(100dvh - 168px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .weather-current { grid-template-columns:repeat(2, 1fr); }
@@ -213,8 +361,9 @@ dialog p { margin:0; line-height:1.45; }
 
 /* Smartphone quer: sehr wenig Höhe, dafür viel Breite. */
 @media (max-height:519px) {
-  .measure-bar, .sign-bar { max-height:calc(100dvh - 136px); }
+  .measure-bar, .sign-bar, .ffeh-bar, .legend-overlay { max-height:calc(100dvh - 136px); }
   .sign-palette { max-height:min(150px, 34dvh); }
+  .ffeh-palette { max-height:min(130px, 28dvh); }
   .weather-box { top:calc(66px + env(safe-area-inset-top)); max-height:calc(100dvh - 148px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .weather-current { grid-template-columns:repeat(3, 1fr); }
 }
@@ -223,13 +372,24 @@ dialog p { margin:0; line-height:1.45; }
 @media print {
   html, body { width:100%; height:100%; overflow:hidden; background:white; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
   .app-shell { width:100%; height:100vh; padding:0; }
-  .topbar, .search-box, .map-tools, .panel, .backdrop, .toast, .leaflet-control-zoom, .measure-bar, .sign-bar, .weather-box { display:none !important; }
+  /* Die Bildschirmlegende bleibt draußen – auf Papier steht die Drucklegende. */
+  .topbar, .search-box, .app-menu, .map-tools, .panel, .backdrop, .toast, .leaflet-control-zoom, .measure-bar, .sign-bar, .ffeh-bar, .weather-box, .legend-button, .legend-overlay { display:none !important; }
   dialog { display:none !important; }
+  /* Die Bearbeitungs-Hervorhebung ist Bildschirmhilfe und gehört nicht auf Papier. */
+  .ffeh-marker.editing .ffeh-symbol { border-color:var(--ffeh-status, #8a8f8a); box-shadow:none; animation:none; }
+  .ffeh-marker.editing .ffeh-ring { box-shadow:none; animation:none; }
   #map { position:absolute; top:0; right:0; bottom:0; left:118mm; width:auto; height:100%; border-left:1px solid #8d918c; }
   .print-legend { position:absolute; z-index:1200; display:block; inset:0 auto 0 0; width:112mm; overflow:hidden; padding:4mm; border:0; background:white; box-shadow:none; }
   .print-legend .legend-list { grid-template-columns:1fr 1fr; align-content:start; gap:2.5mm; }
   .print-legend .legend-item { padding:2mm; break-inside:avoid; min-width:0; }
   .print-legend .legend-item strong { margin-bottom:1.5mm; font-size:7.5pt; line-height:1.15; }
   .print-legend .legend-item img { max-width:100%; max-height:30mm; }
+  .print-legend .ffeh-legend-row { gap:1.5mm; padding:0.4mm 0; font-size:7pt; }
+  .print-legend .ffeh-legend-dot { width:3.4mm; height:3.4mm; border-width:1mm; }
+  .print-legend .ffeh-legend-ring { width:4.2mm; height:4.2mm; border-width:0.6mm; }
+  .print-legend .ffeh-legend small { margin-top:1mm; font-size:6.5pt; }
+  .print-legend .strassen-legend-row { gap:1.5mm; padding:0.4mm 0; font-size:7pt; }
+  .print-legend .strassen-badge { padding:0.2mm 1.2mm; font-size:6.5pt; box-shadow:none; }
+  .print-legend .strassen-legend small { margin-top:1mm; font-size:6.5pt; }
   .leaflet-control-attribution { display:block !important; font-size:7pt; }
 }

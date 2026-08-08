@@ -1,11 +1,13 @@
-const CACHE_NAME = 'navlog-ipad-shell-v19';
+const CACHE_NAME = 'navlog-ipad-shell-v20';
 const APP_SHELL = [
   './',
-  './index.html?v=20260725-19',
+  './index.html?v=20260808-20',
   './offline.html',
-  './app.css?v=20260725-19',
-  './app.js?v=20260725-19',
+  './app.css?v=20260808-20',
+  './app.js?v=20260808-20',
   './manifest.webmanifest',
+  './data/waldbrand-poi-ffeh.geojson',
+  './data/strassen.geojson',
   './assets/feuerwehr-einhausen-logo.png',
   './assets/icons/apple-touch-icon.png',
   './assets/icons/icon-192.png',
@@ -35,6 +37,10 @@ const APP_SHELL = [
   './vendor/taktische-zeichen/loeschgruppe.svg',
   './vendor/taktische-zeichen/hubschrauber.svg',
   './vendor/taktische-zeichen/wasserentnahme.svg',
+  './vendor/taktische-zeichen/hydrant.svg',
+  './vendor/taktische-zeichen/loeschbrunnen.svg',
+  './vendor/taktische-zeichen/zisterne.svg',
+  './vendor/taktische-zeichen/loeschteich.svg',
   './vendor/taktische-zeichen/ankerpunkt.svg',
   './vendor/taktische-zeichen/lookout.svg',
   './vendor/taktische-zeichen/elw1.svg',
@@ -62,8 +68,8 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then(response => {
       if (response.ok) return response;
-      return caches.match('./index.html?v=20260725-19').then(cached => cached || caches.match('./offline.html'));
-    }).catch(() => caches.match('./index.html?v=20260725-19').then(cached => cached || caches.match('./offline.html'))));
+      return caches.match('./index.html?v=20260808-20').then(cached => cached || caches.match('./offline.html'));
+    }).catch(() => caches.match('./index.html?v=20260808-20').then(cached => cached || caches.match('./offline.html'))));
     return;
   }
 
