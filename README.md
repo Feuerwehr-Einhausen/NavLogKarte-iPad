@@ -50,6 +50,7 @@ https://feuerwehr-einhausen.github.io/NavLogKarte-iPad/
 ## Einschränkungen
 
 - NavLog-WMS, Adresssuche, Wetterdaten und Kartenkacheln benötigen eine Internetverbindung.
+- Bereits besuchte Kartenbereiche bleiben in einem Kachel-Zwischenspeicher (ein bis zwei Wochen) liegen und werden auch bei Verbindungsabriss angezeigt; sie laden außerdem spürbar schneller. Unbesuchte Bereiche und andere Zoomstufen brauchen weiterhin Internet.
 - Die Wetteranzeige zeigt Modellwerte für die Kartenmitte; bei Verbindungsabriss wird der letzte gespeicherte Stand mit Zeitstempel angezeigt. Die Beobachtung an der Einsatzstelle bleibt maßgeblich.
 - Updates, Neuinstallationen und zusätzliche iPads benötigen die erreichbare HTTPS-Bereitstellung.
 - iPadOS kann lokale Website- und App-Daten entfernen. Eine installierte PWA ersetzt daher keine zentral administrierte Offline-Kartenlösung.

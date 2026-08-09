@@ -1,6 +1,6 @@
 # Arbeitsplan NavLog-Karte (Stand 09.08.2026)
 
-Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.5.0**
+Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.5.1**
 (live auf GitHub Pages). Dieses Dokument wird fortgeschrieben und mit
 committet.
 
@@ -56,6 +56,35 @@ committet.
   gelten unverändert als eingeschaltet. Ausgeblendete Ebenen erscheinen nicht
   im Druck.
 
+## Erledigt (noch nicht veröffentlicht)
+
+- **F12 – Kachel-Zwischenspeicher im Service Worker**: `wwwroot/sw.js` hat sich
+  bisher nur um gleichnamige Herkunft gekümmert, jede NavLog-Kachel wurde bei
+  jedem Schwenk neu geholt und lief zusätzlich durch die Drossel
+  (`NAVLOG_MAX_PARALLEL`). Neuer Zweig **vor** dem Frühausstieg: `gdw.navlog.de`
+  mit `REQUEST=GetMap` (Groß-/Kleinschreibung egal) und `*.tile.openstreetmap.org`
+  werden cache-first bedient. Alles andere von NavLog (GetFeatureInfo,
+  GetCapabilities, GetLegendGraphic) sowie Nominatim und Open-Meteo bleiben
+  bewusst ungecacht — Sachdaten und Wetter dürfen nicht altern.
+  Der Cache-Schlüssel ist die URL **ohne** `nlretry=N` (der Wiederholer in
+  `app.js` hängt den Parameter an), sodass Erst- und Wiederholversuch denselben
+  Eintrag treffen. Verfall über Wochenrotation statt Zeitstempel:
+  `navlog-kacheln-<ISO-Jahr>-<ISO-Woche>` bzw. `navlog-kacheln-osm-…`
+  (ISO-Woche über die Donnerstagsregel im SW selbst berechnet); geschrieben
+  wird nur in die laufende Woche, bedient aus laufender + voriger — der
+  Bestand ist damit ein bis zwei Wochen alt. Größendeckel 600 (NavLog) bzw.
+  300 (OSM) Einträge je Wochen-Cache, geprüft bei jeder 20. Ablage, bei
+  Überschreitung fallen die 50 ältesten Einträge weg. Opake Antworten
+  (`type === 'opaque'`, status 0) werden mitgenommen, Quotafehler beim `put`
+  still geschluckt, bei Verbindungsabriss wird der Cache-Bestand geliefert.
+  `activate` löscht nicht mehr pauschal alles außer `CACHE_NAME`, sondern
+  verschont die vier gültigen Kachel-Cachenamen — sonst wäre der
+  Zwischenspeicher bei jedem App-Update weg; zusätzlich räumt der erste
+  Kachelzugriff je Worker-Laufzeit abgelaufene Wochen-Caches ab (activate
+  läuft nur bei SW-Updates). `app.js` blieb unverändert.
+  Prüfstand: `scratchpad/test-f12.mjs` lädt `sw.js` in einer node-vm mit
+  gestubbtem `self`/`caches`/`fetch` und kontrollierbarem Datum.
+
 ## Offen
 
 ### 1. NavLog-Befund melden
@@ -96,6 +125,9 @@ NICHT wieder einführen: black-translucent, 100lvh/100vh für die Hülle
   A3-Druck mit Legende.
 
 ### 3. Später / zurückgestellt
+- Gezielter Gebiets-Download (Einsatzgebiet für offline vormerken) —
+  Ausbaustufe auf dem Kachel-Cache aus F12: Kartenausschnitt und Zoomstufen
+  wählen, Kacheln vorab holen und gegen die Wochenrotation festhalten.
 - Fotos an Erkundungspunkten (braucht IndexedDB statt localStorage).
 - Erkundungsfahrt: vorher Vorerfassung der Rastersymbole am Schreibtisch
   (Status „offen"), danach geprüften Bestand als offizielle
