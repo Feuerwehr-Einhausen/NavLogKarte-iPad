@@ -1,10 +1,10 @@
-const CACHE_NAME = 'navlog-ipad-shell-v40';
+const CACHE_NAME = 'navlog-ipad-shell-v41';
 const APP_SHELL = [
   './',
-  './index.html?v=20260809-40',
+  './index.html?v=20260809-41',
   './offline.html',
-  './app.css?v=20260809-40',
-  './app.js?v=20260809-40',
+  './app.css?v=20260809-41',
+  './app.js?v=20260809-41',
   './manifest.webmanifest',
   './data/waldbrand-poi-ffeh.geojson',
   './data/strassen.geojson',
@@ -133,6 +133,25 @@ function kachelSchluessel(adresse) {
 let kachelAblagen = 0;
 let kachelAufraeumen = null;
 
+// Laufende Zähler für die Statistikzeile in der App (⋮-Menü): Wie viele
+// Kacheln kamen aus dem Speicher, wie viele aus dem Netz, wie oft schlug das
+// Ablegen fehl? Gebündelt gemeldet, damit nicht jede Kachel eine Nachricht
+// auslöst.
+const kachelStatistik = { treffer: 0, netz: 0, ablageFehler: 0 };
+let kachelStatistikTimer = null;
+
+function kachelStatistikMelden() {
+  if (kachelStatistikTimer || typeof setTimeout !== 'function') return;
+  kachelStatistikTimer = setTimeout(() => {
+    kachelStatistikTimer = null;
+    try {
+      self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
+        for (const client of clients) client.postMessage({ typ: 'kachelStatistik', ...kachelStatistik });
+      }).catch(() => {});
+    } catch (fehler) { /* Statistik ist Komfort, nie Pflicht. */ }
+  }, 800);
+}
+
 // activate läuft nur bei einem Service-Worker-Update. Damit abgelaufene
 // Wochen-Caches auch ohne App-Update verschwinden, wird einmal je
 // Worker-Laufzeit beim ersten Kachelzugriff aufgeräumt.
@@ -179,10 +198,15 @@ async function kachelAntwort(request, art) {
   await kachelCachesAufraeumen(jetzt);
 
   const treffer = (await cache.match(schluessel)) || (await kachelTreffer(vorher, schluessel));
-  if (treffer) return treffer;
+  if (treffer) {
+    kachelStatistik.treffer++;
+    kachelStatistikMelden();
+    return treffer;
+  }
 
   try {
     const antwort = await fetch(request);
+    kachelStatistik.netz++;
     // Fremde Kacheln kommen oft als opake Antwort (no-cors) zurück: type
     // 'opaque' mit status 0 – die ist brauchbar und wird mitgenommen.
     if (antwort && (antwort.ok || antwort.type === 'opaque')) {
@@ -192,8 +216,10 @@ async function kachelAntwort(request, art) {
         if (kachelAblagen % KACHEL_PRUEF_INTERVALL === 0) await kachelDeckelPruefen(cache, art);
       } catch (fehler) {
         // Speicherplatz voll o. Ä.: Die Kachel wird trotzdem angezeigt.
+        kachelStatistik.ablageFehler++;
       }
     }
+    kachelStatistikMelden();
     return antwort;
   } catch (fehler) {
     const notfall = (await kachelTreffer(aktuell, schluessel)) || (await kachelTreffer(vorher, schluessel));
@@ -229,8 +255,8 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then(response => {
       if (response.ok) return response;
-      return caches.match('./index.html?v=20260809-40').then(cached => cached || caches.match('./offline.html'));
-    }).catch(() => caches.match('./index.html?v=20260809-40').then(cached => cached || caches.match('./offline.html'))));
+      return caches.match('./index.html?v=20260809-41').then(cached => cached || caches.match('./offline.html'));
+    }).catch(() => caches.match('./index.html?v=20260809-41').then(cached => cached || caches.match('./offline.html'))));
     return;
   }
 

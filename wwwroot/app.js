@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 const APP_BUILD = '2026-08-09';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, showSignsLayer: true, showMeasureLayer: true, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
@@ -3217,4 +3217,15 @@ window.addEventListener('afterprint', () => setTimeout(() => state.map?.invalida
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  // Kachel-Statistik aus dem Service Worker: zeigt im ⋮-Menü, wie viele
+  // Kacheln aus dem Speicher kamen – der Beleg, ob der Kachel-Cache greift.
+  navigator.serviceWorker.addEventListener('message', event => {
+    const daten = event.data;
+    if (daten?.typ !== 'kachelStatistik') return;
+    const feld = $('tileCacheStat');
+    if (!feld) return;
+    const fehler = daten.ablageFehler ? ` · ${daten.ablageFehler} Ablagefehler` : '';
+    feld.textContent = `Kacheln seit App-Start: ${daten.treffer} aus Speicher · ${daten.netz} aus Netz${fehler}`;
+    feld.hidden = false;
+  });
 }
