@@ -18,7 +18,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260809-37">
+  <link rel="stylesheet" href="app.css?v=20260809-38">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -239,6 +239,10 @@
         <section><h3>Eigene Layer</h3>
           <label class="switch-row"><input id="ffehToggle" type="checkbox" checked><span class="layer-icon points" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></span><span>Waldbrand POI FFEH</span></label>
           <label class="switch-row"><input id="strassenToggle" type="checkbox"><span class="layer-icon routes" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 4v4c0 3 3 3 3 6v6m11-16v5c0 3-6 3-6 6v5M3 4h4m10 0h4M6 20h4m1 0h4"/></svg></span><span>Straßenbezeichnungen</span></label>
+          <!-- Eigene Einträge aus den Werkzeugen: ausblenden nimmt nur die
+               Kartenebene weg, gespeichert bleiben sie in jedem Fall. -->
+          <label class="switch-row"><input id="signsToggle" type="checkbox" checked><span class="layer-icon points" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 21V3m0 1h13l-3 4.5L19 13H6"/></svg></span><span>Taktische Zeichen</span></label>
+          <label class="switch-row"><input id="measureToggle" type="checkbox" checked><span class="layer-icon thematic" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M5 19h14L5 5v14Z"/></svg></span><span>Messungen &amp; Absperrungen</span></label>
         </section>
         <section><h3>NavLog-Layer</h3><div id="layerList" class="layer-list"><p class="muted">Layer werden geladen …</p></div></section>
       </div>
@@ -309,6 +313,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260809-37"></script>
+  <script src="app.js?v=20260809-38"></script>
 </body>
 </html>

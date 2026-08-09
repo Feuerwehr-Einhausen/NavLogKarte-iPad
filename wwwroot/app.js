@@ -1,11 +1,11 @@
-const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, ffeh: { active: false, visible: true, openOnly: false, selected: null, editingId: null, editingBackup: null, editingIsNew: false, editingHadLocal: false, group: null, markers: new Map(), repo: [] }, strassen: { visible: false, loading: null, features: [], group: null, timer: null }, weather: { marker: null }, presets: { manage: false } };
+const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, visible: true, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, visible: true, selected: null, editingId: null, group: null, saved: new Map() }, ffeh: { active: false, visible: true, openOnly: false, selected: null, editingId: null, editingBackup: null, editingIsNew: false, editingHadLocal: false, group: null, markers: new Map(), repo: [] }, strassen: { visible: false, loading: null, features: [], group: null, timer: null }, weather: { marker: null }, presets: { manage: false } };
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.4.8';
+const APP_VERSION = '1.5.0';
 const APP_BUILD = '2026-08-09';
-const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, layerPresets: [] };
+const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, showSignsLayer: true, showMeasureLayer: true, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
   /^dtk0*25(?:\b|\s)/,
   /^waldbrand\s*poi(?:\b|\s)/,
@@ -80,6 +80,8 @@ function wireUi() {
   $('radiusInput').addEventListener('input', updateWorkingMeasure);
   $('ffehToggle').addEventListener('change', toggleFfehLayer);
   $('strassenToggle').addEventListener('change', toggleStrassenLayer);
+  $('signsToggle').addEventListener('change', toggleSignsLayer);
+  $('measureToggle').addEventListener('change', toggleMeasureLayer);
   $('ffehButton').addEventListener('click', toggleFfeh);
   $('ffehClose').addEventListener('click', () => closeFfeh());
   $('ffehCollapse').addEventListener('click', () => setSheetCollapsed('ffehBar', !$('ffehBar').classList.contains('collapsed')));
@@ -688,6 +690,10 @@ function restoreStartView() {
   toggleFfehLayer();
   $('strassenToggle').checked = state.config.showStrassenLayer === true;
   toggleStrassenLayer();
+  $('signsToggle').checked = state.config.showSignsLayer !== false;
+  toggleSignsLayer();
+  $('measureToggle').checked = state.config.showMeasureLayer !== false;
+  toggleMeasureLayer();
   state.map.setView([state.config.centerLatitude, state.config.centerLongitude], state.config.zoom);
   renderLegend();
   toast('Gespeicherte Startansicht wiederhergestellt.');
@@ -714,7 +720,11 @@ function sanitizeLayerPresets(value) {
       navlogLayers: Array.isArray(item.navlogLayers) ? item.navlogLayers.filter(name => typeof name === 'string') : [],
       osm: item.osm === true,
       ffeh: item.ffeh === true,
-      strassen: item.strassen === true
+      strassen: item.strassen === true,
+      // Sets aus älteren Ständen kennen die beiden Werkzeugebenen noch nicht.
+      // Sie waren damals immer sichtbar – genau so gelten sie weiter.
+      zeichen: item.zeichen !== false,
+      messungen: item.messungen !== false
     }))
     .filter(item => item.name)
     .slice(0, MAX_LAYER_PRESETS);
@@ -752,7 +762,9 @@ function currentLayerSelection() {
     }),
     osm: $('osmToggle').checked,
     ffeh: $('ffehToggle').checked,
-    strassen: $('strassenToggle').checked
+    strassen: $('strassenToggle').checked,
+    zeichen: $('signsToggle').checked,
+    messungen: $('measureToggle').checked
   };
 }
 
@@ -768,6 +780,7 @@ function sameLayerNames(a, b) {
 function matchesLayerPreset(preset) {
   const ist = currentLayerSelection();
   if (ist.osm !== preset.osm || ist.ffeh !== preset.ffeh || ist.strassen !== preset.strassen) return false;
+  if (ist.zeichen !== preset.zeichen || ist.messungen !== preset.messungen) return false;
   // Ohne geladene Capabilities lässt sich der NavLog-Anteil nicht beurteilen:
   // ein Set mit NavLog-Layern gilt dann nie als aktiv.
   if (!state.availableLayers.length && preset.navlogLayers.length) return false;
@@ -874,6 +887,14 @@ async function applyLayerPreset(id) {
     $('ffehToggle').checked = preset.ffeh;
     toggleFfehLayer();
   }
+  if ($('signsToggle').checked !== preset.zeichen) {
+    $('signsToggle').checked = preset.zeichen;
+    toggleSignsLayer();
+  }
+  if ($('measureToggle').checked !== preset.messungen) {
+    $('measureToggle').checked = preset.messungen;
+    toggleMeasureLayer();
+  }
   // Der Hinweis kommt vor dem Laden der Straßendaten, damit eine mögliche
   // Fehlermeldung von dort als letzte stehen bleibt.
   toast(navlogFehlt
@@ -898,6 +919,8 @@ function layerPresetSummary(selection) {
   if (selection.osm) teile.push('OpenStreetMap');
   if (selection.ffeh) teile.push('Waldbrand POI FFEH');
   if (selection.strassen) teile.push('Straßenbezeichnungen');
+  if (selection.zeichen) teile.push('Taktische Zeichen');
+  if (selection.messungen) teile.push('Messungen & Absperrungen');
   return `Gespeichert wird: ${teile.join(', ')}.`;
 }
 
@@ -1238,6 +1261,8 @@ async function saveSettings(event) {
     showOpenStreetMap: $('osmToggle').checked,
     showFfehLayer: $('ffehToggle').checked,
     showStrassenLayer: $('strassenToggle').checked,
+    showSignsLayer: $('signsToggle').checked,
+    showMeasureLayer: $('measureToggle').checked,
     // Die Layersets stehen im selben Eintrag und dürfen beim Speichern der
     // Startansicht nicht verloren gehen.
     layerPresets: layerPresets()
@@ -1261,6 +1286,8 @@ function applyConfigToUi() {
   $('osmToggle').checked = state.config.showOpenStreetMap;
   $('ffehToggle').checked = state.config.showFfehLayer !== false;
   $('strassenToggle').checked = state.config.showStrassenLayer === true;
+  $('signsToggle').checked = state.config.showSignsLayer !== false;
+  $('measureToggle').checked = state.config.showMeasureLayer !== false;
   $('appVersion').textContent = `v${APP_VERSION} · Stand ${APP_BUILD}`;
   renderLayerPresets();
 }
@@ -1296,8 +1323,28 @@ const AREA_STYLE = { color: '#9f1d20', weight: 3, fillColor: '#9f1d20', fillOpac
 const CIRCLE_STYLE = { color: '#9f1d20', weight: 3, dashArray: '4 8', fillColor: '#9f1d20', fillOpacity: 0.09, interactive: false };
 
 function initMeasure() {
-  state.measure.group = L.layerGroup().addTo(state.map);
+  state.measure.group = L.layerGroup();
+  state.measure.visible = state.config.showMeasureLayer !== false;
+  $('measureToggle').checked = state.measure.visible;
+  if (state.measure.visible) state.measure.group.addTo(state.map);
   for (const item of loadMeasurements()) drawSavedMeasurement(item);
+}
+
+// Der Schalter im Panel nimmt nur die Kartenebene weg – die Messungen bleiben
+// vollständig im localStorage und kommen beim Einschalten unverändert zurück.
+function toggleMeasureLayer() {
+  state.measure.visible = $('measureToggle').checked;
+  if (!state.measure.group) return;
+  if (state.measure.visible) {
+    state.measure.group.addTo(state.map);
+  } else {
+    // Erst das Werkzeug sauber schließen (eine angefangene Messung wird dabei
+    // gespeichert), dann ausblenden – sonst bliebe eine Bearbeitung an einer
+    // unsichtbaren Geometrie hängen.
+    if (state.measure.active) closeMeasure();
+    state.map.removeLayer(state.measure.group);
+  }
+  updateActivePresetMarks();
 }
 
 function loadMeasurements() {
@@ -1413,6 +1460,9 @@ function toggleMeasure() {
   if ($('measureBar').hidden) {
     if (state.signs.active) closeSigns();
     if (state.ffeh.active) closeFfeh();
+    // Man kann nicht bearbeiten, was man nicht sieht: das Werkzeug holt seine
+    // Kartenebene bei Bedarf selbst zurück.
+    if (!state.measure.visible) { $('measureToggle').checked = true; toggleMeasureLayer(); }
     // Die Legende würde das Werkzeug-Sheet überlagern und tritt zurück.
     setLegendOverlay(false, false);
     setSheetCollapsed('measureBar', false);
@@ -1622,9 +1672,36 @@ const SIGN_GROUPS = [
 const SIGN_INDEX = new Map(SIGN_GROUPS.flatMap(group => group.signs).map(sign => [sign.key, sign]));
 
 function initSigns() {
-  state.signs.group = L.layerGroup().addTo(state.map);
+  state.signs.group = L.layerGroup();
+  state.signs.visible = state.config.showSignsLayer !== false;
+  $('signsToggle').checked = state.signs.visible;
+  if (state.signs.visible) state.signs.group.addTo(state.map);
   renderSignPalette();
   for (const item of loadSigns()) drawSign(item);
+}
+
+// Wie bei den Messungen: der Schalter betrifft nur die Kartenebene, die
+// gesetzten Zeichen bleiben im localStorage stehen.
+function toggleSignsLayer() {
+  state.signs.visible = $('signsToggle').checked;
+  if (!state.signs.group) return;
+  if (state.signs.visible) {
+    state.signs.group.addTo(state.map);
+    // Leaflet legt die Ziehgriffe beim Hinzufügen neu an – sie müssen dem
+    // Werkzeugzustand folgen, sonst lassen sich Zeichen ungewollt verschieben.
+    setSignDragging(state.signs.active);
+  } else {
+    if (state.signs.active) closeSigns();
+    state.map.removeLayer(state.signs.group);
+  }
+  updateActivePresetMarks();
+}
+
+function setSignDragging(enabled) {
+  for (const marker of state.signs.saved.values()) {
+    if (enabled) marker.dragging?.enable();
+    else marker.dragging?.disable();
+  }
 }
 
 function renderSignPalette() {
@@ -1659,6 +1736,8 @@ function toggleSigns() { $('signBar').hidden ? openSigns() : closeSigns(); }
 function openSigns() {
   if (state.measure.active) closeMeasure();
   if (state.ffeh.active) closeFfeh();
+  // Ausgeblendete Zeichen wären nicht bearbeitbar – der Layer kommt zurück.
+  if (!state.signs.visible) { $('signsToggle').checked = true; toggleSignsLayer(); }
   setLegendOverlay(false, false);
   setSheetCollapsed('signBar', false);
   $('signBar').hidden = false;
@@ -1669,7 +1748,7 @@ function openSigns() {
   $('searchBox').hidden = true;
   $('searchButton').setAttribute('aria-expanded', 'false');
   state.map.getContainer().classList.add('measuring');
-  for (const marker of state.signs.saved.values()) marker.dragging?.enable();
+  setSignDragging(true);
   if (state.signs.selected) selectSign(state.signs.selected);
   else setSignHint('Zeichen wählen und auf der Karte platzieren.');
 }
@@ -1680,7 +1759,7 @@ function closeSigns() {
   $('signBar').hidden = true;
   $('signsButton').setAttribute('aria-expanded', 'false');
   if (!state.measure.active) state.map.getContainer().classList.remove('measuring');
-  for (const marker of state.signs.saved.values()) marker.dragging?.disable();
+  setSignDragging(false);
 }
 
 function selectSign(key) {
@@ -1723,7 +1802,9 @@ function drawSign(item) {
     updateSign(item.id, { lat: position.lat, lng: position.lng });
   });
   marker.addTo(state.signs.group);
-  if (!state.signs.active) marker.dragging.disable();
+  // Bei ausgeblendetem Layer gibt es noch keinen Ziehgriff – toggleSignsLayer
+  // zieht ihn beim Einblenden nach.
+  if (!state.signs.active) marker.dragging?.disable();
   state.signs.saved.set(item.id, marker);
 }
 

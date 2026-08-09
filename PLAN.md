@@ -1,6 +1,6 @@
 # Arbeitsplan NavLog-Karte (Stand 09.08.2026)
 
-Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.4.0**
+Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.5.0**
 (live auf GitHub Pages). Dieses Dokument wird fortgeschrieben und mit
 committet.
 
@@ -39,6 +39,23 @@ committet.
 - Smartphone: Zoom/Maßstab lagen über den Werkzeug-Sheets
   (`.leaflet-top/.leaflet-bottom` auf z-index 700 gesetzt).
 
+## Erledigt (v1.5.0, veröffentlicht)
+
+- **F11 – Zeichen- und Messlayer schaltbar**: Taktische Zeichen und
+  „Messungen & Absperrungen" waren bisher immer sichtbar. Sie haben jetzt im
+  Panel-Abschnitt „Eigene Layer" je einen Schalter (`#signsToggle`,
+  `#measureToggle`, Voreinstellung an) und verhalten sich wie der FFEH-Layer:
+  Aus nimmt nur die Leaflet-Gruppe von der Karte, die Einträge bleiben
+  unangetastet im localStorage. Persistenz als `showSignsLayer` /
+  `showMeasureLayer` im settings-Eintrag (Startansicht stellt sie wieder her).
+  Werkzeug-Kopplung in beide Richtungen: Öffnen des Zeichen- bzw.
+  Messwerkzeugs blendet die zugehörige Ebene selbst ein („man kann nicht
+  bearbeiten, was man nicht sieht"), Ausblenden bei offenem Werkzeug schließt
+  es vorher sauber (laufende Messung wird dabei gesichert). Layersets merken
+  beide Ebenen als `zeichen`/`messungen` mit; ältere Sets ohne diese Felder
+  gelten unverändert als eingeschaltet. Ausgeblendete Ebenen erscheinen nicht
+  im Druck.
+
 ## Offen
 
 ### 1. NavLog-Befund melden
@@ -66,6 +83,10 @@ NICHT wieder einführen: black-translucent, 100lvh/100vh für die Hülle
 - **Layersets am Gerät testen**: Chips im Panel (Umbruch bei vielen Sets),
   Speichern/Überschreiben/Löschen, Markierung des aktiven Sets, Umschalten
   während eines Einsatzes am iPad und am Smartphone.
+- **Zeichen-/Messlayer am Gerät testen**: Ein-/Ausblenden während eines
+  Einsatzes (Daten müssen erhalten bleiben), Öffnen der Werkzeuge bei
+  ausgeblendeter Ebene, Verschieben von Zeichen nach dem Wiedereinblenden,
+  A3-Druck mit ausgeblendeten Ebenen.
 - Klicktoleranz an echten NavLog-Symbolen (auch: keine falschen Nachbarn in
   der Vorbefüllung; ggf. BUFFER/RADIUS/FI_POINT_TOLERANCE in app.js anpassen).
 - Wassersymbole Hydrant/Brunnen/Zisterne/Löschteich sind **Eigenzeichnungen**
@@ -95,6 +116,7 @@ NICHT wieder einführen: black-translucent, 100lvh/100vh für die Hülle
 - Push auf `main` veröffentlicht automatisch (GitHub Pages). Schreibrechte hat
   nur das gh-Konto `Feuerwehr-Einhausen` (`gh auth switch`).
 - Testharness (jsdom, außerhalb des Repos im Session-Scratchpad):
-  `dom.mjs`, `test-f5.mjs` … `test-f9.mjs`, `fuzz.mjs`, `audit.mjs` —
+  `dom.mjs`, `test-f5.mjs` … `test-f11.mjs`, `fuzz.mjs`, `audit.mjs`,
+  `run-all.mjs` (führt alles aus) —
   Scratchpad ist sitzungsgebunden und kann verschwinden; bei Bedarf neu
   aufbauen (echtes index.html + Leaflet in jsdom booten).
