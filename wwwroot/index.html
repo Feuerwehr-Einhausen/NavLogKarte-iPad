@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=20260808-20">
+  <link rel="stylesheet" href="app.css?v=20260809-29">
 </head>
 <body>
   <main id="app" class="app-shell" aria-busy="true">
@@ -195,6 +195,7 @@
            neuer Eintrag ist eine Zeile Markup. -->
       <div id="appMenu" class="app-menu" hidden>
         <div class="app-menu-list" role="menu" aria-label="Verwaltung">
+          <button id="saveLayerPresetButton" class="app-menu-item" type="button" role="menuitem" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm3 0v5h7V4M8 21v-6h8v6"/></svg><span>Aktuelle Layer als Set speichern<small>Die jetzige Layerauswahl unter einem Namen sichern und im Panel antippen.</small></span></button>
           <button id="ffehExport" class="app-menu-item" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11m0-11 4 4m-4-4-4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>FFEH-Punkte exportieren<small>Alle Punkte dieses Geräts als Datei zum Weitergeben.</small></span></button>
           <button id="ffehImport" class="app-menu-item" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 14V3m0 11 4-4m-4 4-4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>FFEH-Punkte importieren<small>Datei eines anderen Geräts mit dem eigenen Bestand zusammenführen.</small></span></button>
           <button id="openSettingsDialog" class="app-menu-item" type="button" role="menuitem" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m4 11 8-6.5 8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/></svg><span>Startansicht bearbeiten<small>Titel und Kartenausschnitt festlegen, auf den die App startet.</small></span></button>
@@ -211,6 +212,16 @@
           <button id="allLayersOff" type="button">Alles aus</button>
           <button id="restoreStartView" class="start-view-button" type="button">Startansicht</button>
         </div>
+        <!-- Layersets: gespeicherte Layerauswahlen. Ein Tipp auf einen Chip
+             schaltet die komplette Auswahl um; der Stift blendet das Löschen
+             ein. Gespeichert wird über das ⋮-Menü. -->
+        <section class="layer-presets">
+          <div class="layer-presets-head">
+            <h3 id="layerPresetsHeading">Layersets</h3>
+            <button id="layerPresetManage" class="layer-preset-manage" type="button" aria-pressed="false" aria-label="Layersets bearbeiten" title="Layersets bearbeiten" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 20h4l10-10-4-4L4 16v4Zm10-14 4 4m-2-6 2-2 4 4-2 2"/></svg></button>
+          </div>
+          <div id="layerPresetList" class="layer-preset-list" role="group" aria-labelledby="layerPresetsHeading"></div>
+        </section>
         <div class="layer-symbol-key" aria-label="Bedeutung der Layersymbole">
           <!-- Die Symbole werden beim Start aus layerIconSvg() gefüllt und sind
                damit immer identisch mit den Symbolen in der Layerliste. -->
@@ -255,6 +266,18 @@
     </form>
   </dialog>
 
+  <dialog id="layerPresetDialog" class="settings-dialog">
+    <button id="closeLayerPresetDialog" class="close-button settings-close" type="button" aria-label="Layerset schließen">×</button>
+    <form id="layerPresetForm" class="settings-form">
+      <div class="dialog-badge">Layerset</div>
+      <h2>Aktuelle Layer speichern</h2>
+      <p class="setup-note">Gespeichert wird nur die Layerauswahl. Der Kartenausschnitt und die Startansicht bleiben unverändert.</p>
+      <label>Name<input id="layerPresetName" maxlength="30" required autocomplete="off" placeholder="z. B. Waldbrand"></label>
+      <p id="layerPresetSummary" class="setup-note"></p>
+      <button class="primary-button" type="submit">Layerset speichern</button>
+    </form>
+  </dialog>
+
   <dialog id="confirmDialog" class="confirm-dialog">
     <form method="dialog">
       <p id="confirmMessage"></p>
@@ -281,6 +304,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/mgrs.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=20260808-20"></script>
+  <script src="app.js?v=20260809-29"></script>
 </body>
 </html>

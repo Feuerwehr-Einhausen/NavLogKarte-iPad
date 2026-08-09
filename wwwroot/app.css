@@ -64,6 +64,22 @@ button { min-width:48px; min-height:48px; cursor:pointer; }
 .layer-actions .start-view-button { border-color:var(--fire); color:white; background:var(--fire); }
 .layer-actions .start-view-button:hover { background:var(--fire-dark); }
 .panel h3 { margin:22px 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:.06em; }
+/* Layersets: gespeicherte Layerauswahlen als Chips direkt unter den
+   Schnellschaltern. Viele Sets brechen um, statt die Zeile zu sprengen. */
+.layer-presets { margin-bottom:10px; }
+.layer-presets-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.layer-presets h3 { margin:14px 0 7px; }
+.layer-preset-manage { min-width:40px; min-height:40px; display:grid; place-items:center; border:1px solid #ccc7bd; border-radius:9px; background:#eeeae2; color:var(--ink); padding:0; }
+.layer-preset-manage svg { width:19px; height:19px; display:block; }
+.layer-preset-manage[aria-pressed="true"] { border-color:var(--fire); background:var(--fire); color:white; }
+.layer-preset-list { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.layer-preset { display:flex; align-items:center; gap:3px; max-width:100%; }
+.layer-preset-chip { min-width:0; min-height:44px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid #ccc7bd; border-radius:99px; background:#eeeae2; color:var(--ink); padding:6px 15px; font-size:13px; font-weight:800; }
+.layer-preset-chip:hover { background:#e2ddd3; }
+.layer-preset-chip.active { border-color:var(--fire); background:var(--fire); color:white; }
+.layer-preset-delete { min-width:40px; min-height:40px; flex:0 0 auto; border:1px solid #ccc7bd; border-radius:99px; background:white; color:var(--fire-dark); padding:0; font-size:20px; font-weight:800; line-height:1; }
+.layer-preset-delete:hover { background:#f3dddd; }
+.layer-preset-empty { margin:0; font-size:12px; line-height:1.4; }
 .layer-symbol-key { display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 2px; border-bottom:1px solid var(--line); color:#646a65; font-size:11px; }
 .layer-symbol-key > span { display:flex; align-items:center; gap:5px; }
 .switch-row, .layer-item { min-height:52px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line); cursor:pointer; }
@@ -117,6 +133,9 @@ dialog p { margin:0; line-height:1.45; }
 .toast.show { opacity:1; transform:translate(-50%, 0); }
 /* Linke Spalte von unten nach oben: Legenden-Knopf, Zoom, Maßstab. */
 .leaflet-top.leaflet-left { top:auto; bottom:calc(72px + env(safe-area-inset-bottom)); }
+/* Leaflet gibt seinen Bedienelementen z-index 1000 – das läge über den
+   Werkzeug-Sheets (820) und der Legende (830). Unter die App-Flächen einordnen. */
+.leaflet-top, .leaflet-bottom { z-index:700; }
 .leaflet-control-zoom { margin-top:0 !important; margin-bottom:0 !important; }
 .leaflet-control-attribution { font-size:9px; }
 .feature-info { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); line-height:1.35; }

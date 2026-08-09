@@ -1,11 +1,11 @@
-const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, ffeh: { active: false, visible: true, openOnly: false, selected: null, editingId: null, editingBackup: null, editingIsNew: false, editingHadLocal: false, group: null, markers: new Map(), repo: [] }, strassen: { visible: false, loading: null, features: [], group: null, timer: null }, weather: { marker: null } };
+const state = { config: null, map: null, mapCrs: 'EPSG:3857', featureInfoFormat: 'text/plain', osm: null, navlogLayers: new Map(), layerInputs: new Map(), layerOrder: [], availableLayers: [], searchMarker: null, measure: { active: false, mode: null, points: [], markers: [], tempLayer: null, group: null, saved: new Map(), editingId: null, editingBackup: null }, signs: { active: false, selected: null, editingId: null, group: null, saved: new Map() }, ffeh: { active: false, visible: true, openOnly: false, selected: null, editingId: null, editingBackup: null, editingIsNew: false, editingHadLocal: false, group: null, markers: new Map(), repo: [] }, strassen: { visible: false, loading: null, features: [], group: null, timer: null }, weather: { marker: null }, presets: { manage: false } };
 const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.3.0';
-const APP_BUILD = '2026-08-08';
-const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false };
+const APP_VERSION = '1.4.0';
+const APP_BUILD = '2026-08-09';
+const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
   /^dtk0*25(?:\b|\s)/,
   /^waldbrand\s*poi(?:\b|\s)/,
@@ -56,6 +56,11 @@ function wireUi() {
   $('osmToggle').addEventListener('change', toggleOsm);
   $('allLayersOff').addEventListener('click', turnAllLayersOff);
   $('restoreStartView').addEventListener('click', restoreStartView);
+  $('layerPresetManage').addEventListener('click', toggleLayerPresetManage);
+  $('saveLayerPresetButton').addEventListener('click', openLayerPresetDialog);
+  $('layerPresetForm').addEventListener('submit', saveLayerPreset);
+  $('closeLayerPresetDialog').addEventListener('click', () => $('layerPresetDialog').close());
+  $('layerPresetDialog').addEventListener('click', event => { if (event.target === $('layerPresetDialog')) $('layerPresetDialog').close(); });
   $('setupForm').addEventListener('submit', saveKid);
   // saveSettings bleibt unverändert; das Schließen hängt nur hinten dran.
   $('settingsForm').addEventListener('submit', async event => { await saveSettings(event); $('settingsDialog').close(); });
@@ -117,6 +122,10 @@ function wireUi() {
     if (signEditButton) editSign(signEditButton.dataset.id);
     const ffehDeleteButton = event.target.closest('.ffeh-delete-button');
     if (ffehDeleteButton) deleteFfehPoint(ffehDeleteButton.dataset.id);
+    const presetChip = event.target.closest('.layer-preset-chip');
+    if (presetChip) applyLayerPreset(presetChip.dataset.presetId);
+    const presetDeleteButton = event.target.closest('.layer-preset-delete');
+    if (presetDeleteButton) deleteLayerPreset(presetDeleteButton.dataset.presetId);
     const ffehEditButton = event.target.closest('.ffeh-edit-button');
     if (ffehEditButton) editFfehPoint(ffehEditButton.dataset.id);
     const ffehAssessButton = event.target.closest('.ffeh-assess-button');
@@ -495,9 +504,13 @@ function renderLayers() {
     label.append(input, icon, text);
     list.append(label);
   }
-  for (const layerName of state.config.defaultLayers) {
-    const layer = state.availableLayers.find(item => item.name === layerName);
-    if (layer && state.layerInputs.has(layerName)) toggleNavlogLayer(layer, true);
+  // Hintergrundkarte zuerst aktivieren: Ihre Kacheln stehen dann vorn in der
+  // NavLog-Warteschlange und sind als Erste sichtbar.
+  const startLayers = state.config.defaultLayers
+    .map(name => state.availableLayers.find(item => item.name === name))
+    .filter(layer => layer && state.layerInputs.has(layer.name));
+  for (const layer of [...startLayers.filter(isBackgroundLayer), ...startLayers.filter(layer => !isBackgroundLayer(layer))]) {
+    toggleNavlogLayer(layer, true);
   }
 }
 
@@ -516,7 +529,9 @@ function toggleNavlogLayer(layer, enabled, updateLegend = true) {
     }
     if (!state.navlogLayers.has(layer.name)) {
       const pane = isBackgroundLayer(layer) ? 'navlogBackgroundPane' : 'navlogOverlayPane';
-      const tile = L.tileLayer.wms(navlogUrl(), { layers: layer.name, format: 'image/png', transparent: true, version: '1.1.1', attribution: 'NavLog', pane });
+      const tile = new NavlogWmsLayer(navlogUrl(), { layers: layer.name, format: 'image/png', transparent: true, version: '1.1.1', attribution: 'NavLog', pane });
+      attachNavlogTileRetry(tile);
+      if (isBackgroundLayer(layer)) attachBackgroundLoadHint(tile, layer);
       state.navlogLayers.set(layer.name, tile);
     }
     state.navlogLayers.get(layer.name).addTo(state.map);
@@ -529,6 +544,99 @@ function toggleNavlogLayer(layer, enabled, updateLegend = true) {
     state.layerOrder = state.layerOrder.filter(name => name !== layer.name);
   }
   if (updateLegend) renderLegend();
+}
+
+// Beim Start laufen Dutzende WMS-Anfragen gleichzeitig; weist der Dienst
+// einzelne ab, bleiben die Kacheln bei Leaflet sonst dauerhaft leer (typisch:
+// die Hintergrundkarte fehlt sporadisch). Gescheiterte Kacheln werden deshalb
+// mit Abstand bis zu zweimal neu angefordert.
+// Der NavLog-Dienst verkraftet nur wenige gleichzeitige Renderings pro
+// Kunden-ID: Ein Schwall (Seitenstart, Layerwechsel, mehrere Geräte) führt zu
+// reihenweise abgewiesenen Kacheln – sichtbar als graue Hintergrundkarte.
+// Deshalb laufen alle NavLog-Kachelanfragen über eine gemeinsame Warteschlange
+// mit fester Obergrenze; der Rest wartet, statt abgewiesen zu werden.
+const NAVLOG_MAX_PARALLEL = 6;
+const navlogQueue = { aktiv: 0, wartend: [] };
+
+function navlogQueueNext() {
+  while (navlogQueue.aktiv < NAVLOG_MAX_PARALLEL && navlogQueue.wartend.length) {
+    const job = navlogQueue.wartend.shift();
+    if (job.abgebrochen) continue;
+    navlogQueue.aktiv++;
+    job.gestartet = true;
+    job.start();
+  }
+}
+
+function navlogQueueDone(job) {
+  if (!job.gestartet || job.beendet) return;
+  job.beendet = true;
+  navlogQueue.aktiv = Math.max(0, navlogQueue.aktiv - 1);
+  navlogQueueNext();
+}
+
+const NavlogWmsLayer = L.TileLayer.WMS.extend({
+  createTile(coords, done) {
+    const tile = document.createElement('img');
+    tile.alt = '';
+    tile.setAttribute('role', 'presentation');
+    const job = { abgebrochen: false, gestartet: false, beendet: false };
+    job.start = () => { tile.src = this.getTileUrl(coords); };
+    tile._navlogJob = job;
+    L.DomEvent.on(tile, 'load', () => { navlogQueueDone(job); done(null, tile); });
+    L.DomEvent.on(tile, 'error', event => { navlogQueueDone(job); done(event, tile); });
+    navlogQueue.wartend.push(job);
+    navlogQueueNext();
+    return tile;
+  },
+  // Weggeschobene/entfernte Kacheln geben ihren Platz in der Schlange frei.
+  _removeTile(key) {
+    const tile = this._tiles[key]?.el;
+    if (tile?._navlogJob) { tile._navlogJob.abgebrochen = true; navlogQueueDone(tile._navlogJob); }
+    return L.TileLayer.WMS.prototype._removeTile.call(this, key);
+  }
+});
+
+function attachNavlogTileRetry(tile) {
+  tile.on('tileerror', event => {
+    const img = event.tile;
+    const versuch = (img._navlogRetry || 0) + 1;
+    if (versuch > 4 || !img.src) return;
+    img._navlogRetry = versuch;
+    const src = img.src.replace(/&nlretry=\d+/, '');
+    // Ansteigender Abstand (1,5 s → 12 s): Der Dienst weist unter dem
+    // Anfrageschwall eines Seitenstarts die teuren Kacheln zunächst ab und
+    // braucht spürbar Zeit, bis er wieder liefert.
+    setTimeout(() => {
+      // Nur wiederholen, wenn die Kachel noch angezeigt werden soll.
+      if (img.isConnected) img.src = `${src}&nlretry=${versuch}`;
+    }, 1500 * Math.pow(2, versuch - 1));
+  });
+}
+
+// Ladefortschritt der Hintergrundkarte in der Statuszeile: zeigt beim Aufbau
+// „X von Y Kacheln" (plus Fehlversuche, die die Warteschlange wiederholt) und
+// räumt sich nach dem vollständigen Laden selbst wieder weg.
+function attachBackgroundLoadHint(tile, layer) {
+  const zaehler = { angefragt: 0, geladen: 0, fehler: 0 };
+  let timer;
+  const zeigen = (fertig = false) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (fertig || zaehler.geladen >= zaehler.angefragt) {
+        setStatus(`${state.availableLayers.length} NavLog-Layer verfügbar`);
+        return;
+      }
+      const fehler = zaehler.fehler ? ` · ${zaehler.fehler} Fehlversuche (wird wiederholt)` : '';
+      setStatus(`${layer.title || layer.name}: ${zaehler.geladen} von ${zaehler.angefragt} Kacheln geladen${fehler}`);
+    }, fertig ? 1200 : 350);
+  };
+  // Jede neue Ladeserie (Start, Zoom, Verschieben) beginnt mit frischen Zahlen.
+  tile.on('loading', () => { zaehler.angefragt = 0; zaehler.geladen = 0; zaehler.fehler = 0; });
+  tile.on('tileloadstart', () => { zaehler.angefragt++; zeigen(); });
+  tile.on('tileload', () => { zaehler.geladen++; zeigen(); });
+  tile.on('tileerror', () => { zaehler.fehler++; zeigen(); });
+  tile.on('load', () => zeigen(true));
 }
 
 function isBackgroundLayer(layer) {
@@ -585,6 +693,242 @@ function restoreStartView() {
   toast('Gespeicherte Startansicht wiederhergestellt.');
 }
 
+// ── Layersets ─────────────────────────────────────────────────────────────
+// Benannte Layerauswahlen für den schnellen Wechsel zwischen Lagen. Sie liegen
+// im bestehenden settings-Eintrag, sind aber vollständig von der Startansicht
+// getrennt: Layersets merken nur, welche Layer an sind – nie einen
+// Kartenausschnitt. Gespeichert werden Layernamen, keine Listenpositionen,
+// damit eine geänderte GetCapabilities-Antwort die Sets nicht verschiebt.
+const MAX_LAYER_PRESETS = 12;
+const MAX_LAYER_PRESET_NAME = 30;
+
+// Fremde oder veraltete Einträge im localStorage dürfen die Anzeige nicht
+// zerlegen – deshalb wird jedes Feld auf seinen erwarteten Typ gebracht.
+function sanitizeLayerPresets(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      id: String(item.id || crypto.randomUUID()),
+      name: String(item.name ?? '').trim().slice(0, MAX_LAYER_PRESET_NAME),
+      navlogLayers: Array.isArray(item.navlogLayers) ? item.navlogLayers.filter(name => typeof name === 'string') : [],
+      osm: item.osm === true,
+      ffeh: item.ffeh === true,
+      strassen: item.strassen === true
+    }))
+    .filter(item => item.name)
+    .slice(0, MAX_LAYER_PRESETS);
+}
+
+function layerPresets() { return state.config?.layerPresets ?? []; }
+
+function findLayerPreset(id) { return layerPresets().find(preset => preset.id === id) || null; }
+
+// Schreibt ausschließlich layerPresets in den gespeicherten settings-Eintrag.
+// Alles andere (Titel, Mittelpunkt, Zoom, Startlayer) wird unverändert
+// übernommen – ein Layerset darf die Startansicht nie überschreiben.
+function persistLayerPresets(presets) {
+  let gespeichert = {};
+  try { gespeichert = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || '{}') || {}; }
+  catch { gespeichert = {}; }
+  try {
+    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify({ ...gespeichert, layerPresets: presets }));
+    state.config.layerPresets = presets;
+    return true;
+  } catch (error) {
+    toast(error.message || 'Das Layerset konnte nicht gespeichert werden.');
+    return false;
+  }
+}
+
+// Der Ist-Zustand aller schaltbaren Layer. layerOrder hält die NavLog-Layer in
+// der Reihenfolge, in der sie eingeschaltet wurden – dieselbe Quelle nutzt auch
+// die Startansicht.
+function currentLayerSelection() {
+  return {
+    navlogLayers: state.layerOrder.filter(name => {
+      const tile = state.navlogLayers.get(name);
+      return tile && state.map?.hasLayer(tile);
+    }),
+    osm: $('osmToggle').checked,
+    ffeh: $('ffehToggle').checked,
+    strassen: $('strassenToggle').checked
+  };
+}
+
+// Nur Layer, die der Dienst aktuell meldet, lassen sich schalten.
+function presetNavlogLayers(preset) {
+  return preset.navlogLayers.filter(name => state.availableLayers.some(layer => layer.name === name));
+}
+
+function sameLayerNames(a, b) {
+  return a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+}
+
+function matchesLayerPreset(preset) {
+  const ist = currentLayerSelection();
+  if (ist.osm !== preset.osm || ist.ffeh !== preset.ffeh || ist.strassen !== preset.strassen) return false;
+  // Ohne geladene Capabilities lässt sich der NavLog-Anteil nicht beurteilen:
+  // ein Set mit NavLog-Layern gilt dann nie als aktiv.
+  if (!state.availableLayers.length && preset.navlogLayers.length) return false;
+  return sameLayerNames(ist.navlogLayers, presetNavlogLayers(preset));
+}
+
+function renderLayerPresets() {
+  const list = $('layerPresetList');
+  if (!list) return;
+  const presets = layerPresets();
+  list.replaceChildren();
+  if (!presets.length) {
+    state.presets.manage = false;
+    $('layerPresetManage').hidden = true;
+    $('layerPresetManage').setAttribute('aria-pressed', 'false');
+    const hinweis = document.createElement('p');
+    hinweis.className = 'muted layer-preset-empty';
+    hinweis.textContent = 'Noch keine Layersets – über ⋮ speichern.';
+    list.append(hinweis);
+    return;
+  }
+  $('layerPresetManage').hidden = false;
+  for (const preset of presets) {
+    const eintrag = document.createElement('span');
+    eintrag.className = 'layer-preset';
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'layer-preset-chip';
+    chip.dataset.presetId = preset.id;
+    chip.setAttribute('aria-pressed', 'false');
+    // Namen gehen ausschließlich über textContent in die Seite; das ist
+    // strenger als escapeHtml, weil gar kein Markup entstehen kann.
+    chip.textContent = preset.name;
+    chip.title = preset.name;
+    eintrag.append(chip);
+    const loeschen = document.createElement('button');
+    loeschen.type = 'button';
+    loeschen.className = 'layer-preset-delete';
+    loeschen.dataset.presetId = preset.id;
+    loeschen.hidden = !state.presets.manage;
+    loeschen.setAttribute('aria-label', `Layerset ${preset.name} löschen`);
+    loeschen.textContent = '×';
+    eintrag.append(loeschen);
+    list.append(eintrag);
+  }
+  updateActivePresetMarks();
+}
+
+// Markiert das Set, dessen gespeicherter Zustand genau dem Ist-Zustand
+// entspricht. Nach jedem Umschalten von Hand erlischt die Markierung.
+function updateActivePresetMarks() {
+  const list = $('layerPresetList');
+  if (!list) return;
+  for (const chip of list.querySelectorAll('.layer-preset-chip')) {
+    const preset = findLayerPreset(chip.dataset.presetId);
+    const aktiv = Boolean(preset) && matchesLayerPreset(preset);
+    chip.setAttribute('aria-pressed', String(aktiv));
+    chip.classList.toggle('active', aktiv);
+  }
+}
+
+function toggleLayerPresetManage() {
+  state.presets.manage = !state.presets.manage;
+  $('layerPresetManage').setAttribute('aria-pressed', String(state.presets.manage));
+  renderLayerPresets();
+}
+
+// Stellt exakt den gespeicherten Layerzustand her. Der Kartenausschnitt bleibt
+// bewusst unangetastet – dafür ist die Startansicht zuständig.
+async function applyLayerPreset(id) {
+  const preset = findLayerPreset(id);
+  if (!preset) return;
+  const navlogFehlt = !state.availableLayers.length && preset.navlogLayers.length > 0;
+  // Nur die Unterschiede schalten: Ein bereits aktiver Layer (z. B. die DTK)
+  // bleibt unangetastet – Entfernen und sofortiges Wiederhinzufügen lässt
+  // Leaflet-Kachellayer sonst bis zur nächsten Kartenbewegung leer.
+  const soll = new Set(preset.navlogLayers);
+  const istAktiv = (name) => {
+    const tile = state.navlogLayers.get(name);
+    return Boolean(tile && state.map.hasLayer(tile));
+  };
+  for (const layer of state.availableLayers) {
+    if (soll.has(layer.name) || !istAktiv(layer.name)) continue;
+    const input = state.layerInputs.get(layer.name);
+    if (input) input.checked = false;
+    toggleNavlogLayer(layer, false, false);
+  }
+  // OSM vor den NavLog-Layern: ein Hintergrundlayer aus dem Set schaltet es
+  // anschließend selbst wieder ab, umgekehrt ginge die Reihenfolge verloren.
+  const osmSoll = preset.osm && !$('osmToggle').disabled;
+  if ($('osmToggle').checked !== osmSoll) {
+    $('osmToggle').checked = osmSoll;
+    toggleOsm();
+  }
+  for (const name of preset.navlogLayers) {
+    const layer = state.availableLayers.find(item => item.name === name);
+    const input = state.layerInputs.get(name);
+    // Layer, die der Dienst nicht mehr meldet, werden still übersprungen.
+    if (!layer || !input) continue;
+    input.checked = true;
+    if (!istAktiv(name)) toggleNavlogLayer(layer, true, false);
+  }
+  if ($('ffehToggle').checked !== preset.ffeh) {
+    $('ffehToggle').checked = preset.ffeh;
+    toggleFfehLayer();
+  }
+  // Der Hinweis kommt vor dem Laden der Straßendaten, damit eine mögliche
+  // Fehlermeldung von dort als letzte stehen bleibt.
+  toast(navlogFehlt
+    ? `Layerset „${preset.name}“ angewendet – NavLog-Layer fehlen, solange der Dienst nicht erreichbar ist.`
+    : `Layerset „${preset.name}“ angewendet.`);
+  if ($('strassenToggle').checked !== preset.strassen) {
+    $('strassenToggle').checked = preset.strassen;
+    await toggleStrassenLayer();
+  }
+  renderLegend();
+}
+
+function openLayerPresetDialog() {
+  closeAppMenu();
+  $('layerPresetName').value = '';
+  $('layerPresetSummary').textContent = layerPresetSummary(currentLayerSelection());
+  $('layerPresetDialog').showModal();
+}
+
+function layerPresetSummary(selection) {
+  const teile = [`${selection.navlogLayers.length} NavLog-Layer`];
+  if (selection.osm) teile.push('OpenStreetMap');
+  if (selection.ffeh) teile.push('Waldbrand POI FFEH');
+  if (selection.strassen) teile.push('Straßenbezeichnungen');
+  return `Gespeichert wird: ${teile.join(', ')}.`;
+}
+
+async function saveLayerPreset(event) {
+  event.preventDefault();
+  const name = $('layerPresetName').value.trim().slice(0, MAX_LAYER_PRESET_NAME);
+  if (!name) { toast('Bitte einen Namen für das Layerset eingeben.'); return; }
+  const presets = [...layerPresets()];
+  const vorhanden = presets.findIndex(preset => preset.name.toLowerCase() === name.toLowerCase());
+  if (vorhanden < 0 && presets.length >= MAX_LAYER_PRESETS) {
+    toast(`Es sind höchstens ${MAX_LAYER_PRESETS} Layersets möglich. Bitte zuerst eines löschen.`);
+    return;
+  }
+  if (vorhanden >= 0 && !await confirmAction(`Layerset „${presets[vorhanden].name}“ mit der aktuellen Layerauswahl überschreiben?`, 'Überschreiben')) return;
+  const preset = { id: vorhanden >= 0 ? presets[vorhanden].id : crypto.randomUUID(), name, ...currentLayerSelection() };
+  if (vorhanden >= 0) presets[vorhanden] = preset; else presets.push(preset);
+  if (!persistLayerPresets(presets)) return;
+  renderLayerPresets();
+  $('layerPresetDialog').close();
+  toast(`Layerset „${name}“ gespeichert.`);
+}
+
+async function deleteLayerPreset(id) {
+  const preset = findLayerPreset(id);
+  if (!preset) return;
+  if (!await confirmAction(`Layerset „${preset.name}“ wirklich löschen?`)) return;
+  if (!persistLayerPresets(layerPresets().filter(item => item.id !== id))) return;
+  renderLayerPresets();
+  toast(`Layerset „${preset.name}“ gelöscht.`);
+}
+
 // Zwei Ziele mit demselben Inhalt: das Overlay auf der Karte und die Drucklegende.
 const LEGEND_TARGETS = ['legendOverlayList', 'printLegendList'];
 
@@ -599,6 +943,9 @@ function renderLegend() {
   // Die eigenen Layer kommen nicht vom WMS und brauchen eine feste Legende.
   if (state.strassen.visible) for (const id of LEGEND_TARGETS) $(id).prepend(strassenLegendItem());
   if (state.ffeh.visible) for (const id of LEGEND_TARGETS) $(id).prepend(ffehLegendItem());
+  // Jede Layeränderung läuft hier vorbei – der passende Ort, um die Markierung
+  // des aktiven Layersets nachzuziehen.
+  updateActivePresetMarks();
 }
 
 // ── Legende als Kartenüberlagerung ────────────────────────────────────────
@@ -705,6 +1052,8 @@ function toggleOsm() {
     renderLegend();
   } else {
     state.map.removeLayer(state.osm);
+    // Ohne OSM ändert sich die Legende nicht, wohl aber die Layerauswahl.
+    updateActivePresetMarks();
   }
 }
 
@@ -888,7 +1237,10 @@ async function saveSettings(event) {
     defaultLayers: enabled,
     showOpenStreetMap: $('osmToggle').checked,
     showFfehLayer: $('ffehToggle').checked,
-    showStrassenLayer: $('strassenToggle').checked
+    showStrassenLayer: $('strassenToggle').checked,
+    // Die Layersets stehen im selben Eintrag und dürfen beim Speichern der
+    // Startansicht nicht verloren gehen.
+    layerPresets: layerPresets()
   };
   try {
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(next));
@@ -910,6 +1262,7 @@ function applyConfigToUi() {
   $('ffehToggle').checked = state.config.showFfehLayer !== false;
   $('strassenToggle').checked = state.config.showStrassenLayer === true;
   $('appVersion').textContent = `v${APP_VERSION} · Stand ${APP_BUILD}`;
+  renderLayerPresets();
 }
 
 function loadLocalConfig() {
@@ -923,7 +1276,8 @@ function loadLocalConfig() {
     ...settings,
     configured: Boolean(kid),
     defaultLayers: hasSavedLayerSelection ? settings.defaultLayers : [],
-    useInitialLayerDefaults: !hasSavedLayerSelection
+    useInitialLayerDefaults: !hasSavedLayerSelection,
+    layerPresets: sanitizeLayerPresets(settings.layerPresets)
   };
 }
 
