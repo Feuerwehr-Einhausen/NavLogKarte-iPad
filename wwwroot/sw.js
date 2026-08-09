@@ -1,10 +1,10 @@
-const CACHE_NAME = 'navlog-ipad-shell-v33';
+const CACHE_NAME = 'navlog-ipad-shell-v34';
 const APP_SHELL = [
   './',
-  './index.html?v=20260809-33',
+  './index.html?v=20260809-34',
   './offline.html',
-  './app.css?v=20260809-33',
-  './app.js?v=20260809-33',
+  './app.css?v=20260809-34',
+  './app.js?v=20260809-34',
   './manifest.webmanifest',
   './data/waldbrand-poi-ffeh.geojson',
   './data/strassen.geojson',
@@ -68,8 +68,8 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then(response => {
       if (response.ok) return response;
-      return caches.match('./index.html?v=20260809-33').then(cached => cached || caches.match('./offline.html'));
-    }).catch(() => caches.match('./index.html?v=20260809-33').then(cached => cached || caches.match('./offline.html'))));
+      return caches.match('./index.html?v=20260809-34').then(cached => cached || caches.match('./offline.html'));
+    }).catch(() => caches.match('./index.html?v=20260809-34').then(cached => cached || caches.match('./offline.html'))));
     return;
   }
 

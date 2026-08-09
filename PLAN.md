@@ -47,6 +47,14 @@ gleichzeitiger Renderings pro Kunden-ID betrifft jeden WMS-Client, besonders
 mehrere iPads im Einsatz). Falls NavLog ein dokumentiertes Limit nennt,
 `NAVLOG_MAX_PARALLEL` in app.js exakt darauf einstellen.
 
+### 1a. Wissensstand Vollbild auf iOS (abgeschlossen 09.08.2026)
+Die Karte läuft seit v1.4.1/1.4.2 bis unter die Statusleiste (App-Hülle ohne
+Safe-Area-Polster, fixiert an allen Kanten). Der verbleibende Streifen am
+unteren Rand ist vom Betriebssystem reserviert (Home-Indikator-Zone
+installierter Web-Apps; per Messkanten-Diagnose belegt: Fenster 402×812 bei
+Screen 402×874, Seite endet oberhalb des Streifens). Kein Webseiten-Zugriff
+möglich; allenfalls Farbabstimmung über `background_color` im Manifest.
+
 ### 2. Praxis-Abnahme am Gerät (nur durch FFEH möglich)
 - Kachel-Warteschlange im Alltag beobachten (Karte baut sich stückweise auf;
   Statuszeile zeigt den Fortschritt) — insbesondere mit mehreren iPads
