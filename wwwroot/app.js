@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.4.5';
+const APP_VERSION = '1.4.6';
 const APP_BUILD = '2026-08-09';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
