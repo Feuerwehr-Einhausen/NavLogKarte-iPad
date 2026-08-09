@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 const APP_BUILD = '2026-08-09';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
@@ -1261,8 +1261,24 @@ function applyConfigToUi() {
   $('osmToggle').checked = state.config.showOpenStreetMap;
   $('ffehToggle').checked = state.config.showFfehLayer !== false;
   $('strassenToggle').checked = state.config.showStrassenLayer === true;
-  $('appVersion').textContent = `v${APP_VERSION} · Stand ${APP_BUILD}`;
+  $('appVersion').textContent = `v${APP_VERSION} · Stand ${APP_BUILD}${vollbildDiagnose()}`;
   renderLayerPresets();
+}
+
+// Vorübergehend: Vollbild-Diagnose in der Versionszeile, um den unteren
+// Randstreifen auf iOS einzugrenzen (Fenster- vs. Bildschirmhöhe, gemeldeter
+// unterer Sicherheitsabstand, Installations-Modus).
+function vollbildDiagnose() {
+  try {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;bottom:0;visibility:hidden;padding-bottom:env(safe-area-inset-bottom);';
+    document.body.append(probe);
+    const sab = getComputedStyle(probe).paddingBottom;
+    probe.remove();
+    const modus = navigator.standalone === true ? 'installiert' : (navigator.standalone === false ? 'Browser' : 'unbekannt');
+    const vv = Math.round(window.visualViewport?.height || 0);
+    return ` · Diagnose: ${modus} · Fenster ${window.innerWidth}×${window.innerHeight} · Screen ${screen.width}×${screen.height} · VV ${vv} · SAB ${sab}`;
+  } catch { return ''; }
 }
 
 function loadLocalConfig() {
