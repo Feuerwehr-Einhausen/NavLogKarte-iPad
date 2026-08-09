@@ -115,6 +115,9 @@ NICHT wieder einführen: black-translucent, 100lvh/100vh für die Hülle
   Dateien in `APP_SHELL` eintragen (fehlende Pfade brechen die Installation).
 - Push auf `main` veröffentlicht automatisch (GitHub Pages). Schreibrechte hat
   nur das gh-Konto `Feuerwehr-Einhausen` (`gh auth switch`).
+- **Commit/Push nur auf ausdrückliche Freigabe des Nutzers** — fertige Stände
+  im Arbeitsverzeichnis lassen und „bereit zum Release" melden (Anweisung
+  vom 09.08.2026).
 - Testharness (jsdom, außerhalb des Repos im Session-Scratchpad):
   `dom.mjs`, `test-f5.mjs` … `test-f11.mjs`, `fuzz.mjs`, `audit.mjs`,
   `run-all.mjs` (führt alles aus) —

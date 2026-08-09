@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const APP_BUILD = '2026-08-09';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, showSignsLayer: true, showMeasureLayer: true, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
@@ -667,8 +667,15 @@ function turnAllLayersOff() {
     if (input) input.checked = false;
     toggleNavlogLayer(layer, false, false);
   }
+  // „Alles aus" gilt auch für OSM und die eigenen Layer (FFEH, Straßen,
+  // Zeichen, Messungen) – jeweils nur schalten, wenn gerade an.
+  if ($('osmToggle').checked) { $('osmToggle').checked = false; toggleOsm(); }
+  const eigene = [['ffehToggle', toggleFfehLayer], ['strassenToggle', toggleStrassenLayer], ['signsToggle', toggleSignsLayer], ['measureToggle', toggleMeasureLayer]];
+  for (const [id, schalten] of eigene) {
+    if ($(id).checked) { $(id).checked = false; schalten(); }
+  }
   renderLegend();
-  toast('Alle NavLog-Layer sind ausgeschaltet.');
+  toast('Alle Layer sind ausgeschaltet.');
 }
 
 function restoreStartView() {
