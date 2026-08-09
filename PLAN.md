@@ -1,8 +1,37 @@
 # Arbeitsplan NavLog-Karte (Stand 09.08.2026)
 
-Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.5.1**
+Interner Arbeitsstand für die Weiterentwicklung. Veröffentlicht ist **v1.6.2**
 (live auf GitHub Pages). Dieses Dokument wird fortgeschrieben und mit
 committet.
+
+## Handoff — hier morgen weitermachen (10.08.2026)
+
+**Offene Frage Nummer eins: Lädt die Karte wieder normal?**
+Am Abend des 09.08. war das Laden der NavLog-Kacheln durchgehend zäh, mit
+grauen Flächen. Ein A/B-Test über drei parallel bereitgestellte Stände
+(v1.2.3 vom 25.07. = komplett vor der Umbauarbeit, v1.3.0, v1.6.1) zeigte:
+**alle drei gleich zäh**, die alte Version nur einen Tick besser. Damit ist
+belegt, dass die Ursache beim NavLog-Dienst liegt, nicht in unseren
+Änderungen. Der „Tick" ging auf die feste Drossel zurück und ist mit v1.6.2
+behoben (adaptive Drossel, siehe unten).
+
+Erster Schritt morgen: dieselbe Runde in der installierten App wiederholen
+(Gebiet schwenken, zoomen, Stellen erneut besuchen) und im ⋮-Menü die
+Statistikzeile ablesen: „Kacheln seit App-Start: X aus Speicher · Y aus
+Netz". Auswertung:
+- **X wächst beim Wiederbesuch** → Kachel-Cache greift, Thema erledigt.
+- **X bleibt 0** → Cache greift auf iOS nicht; dann in Safari-Entwicklertools
+  (Mac mit Kabel) prüfen, ob der Service Worker die GetMap-Anfragen wirklich
+  abfängt.
+- **„Z Ablagefehler"** → das Speichern scheitert (Platz/WebKit-Quota); dann
+  Deckel `KACHEL_MAX_NAVLOG` in sw.js senken.
+- **Alles wieder flott, auch ohne Cache-Treffer** → der Dienst hatte einen
+  schlechten Tag; dann Punkt „NavLog-Befund melden" abarbeiten.
+
+Für einen erneuten A/B-Vergleich: alte Stände als Arbeitskopien bereitstellen
+mit `git worktree add <pfad> 3aec219` (v1.2.3) bzw. `ecd5ec0` (v1.3.0) und je
+`python3 -m http.server <port>` aus deren `wwwroot`. Danach mit
+`git worktree remove <pfad>` aufräumen.
 
 ## Erledigt (v1.3.0, veröffentlicht)
 
@@ -84,6 +113,18 @@ committet.
   läuft nur bei SW-Updates). `app.js` blieb unverändert.
   Prüfstand: `scratchpad/test-f12.mjs` lädt `sw.js` in einer node-vm mit
   gestubbtem `self`/`caches`/`fetch` und kontrollierbarem Datum.
+
+## Erledigt (v1.6.x, veröffentlicht)
+
+- **F12 – Kachel-Zwischenspeicher** (v1.6.0, Details unten) und
+  **Kachel-Statistik im ⋮-Menü** (v1.6.1): Der Service Worker meldet
+  Speichertreffer, Netzabrufe und Ablagefehler an die App — die Zeile unter
+  der Version ist der Beleg, ob der Cache am Gerät greift.
+- **Adaptive Drossel** (v1.6.2): `NAVLOG_MAX_PARALLEL` war fest 6 und bremste
+  einen gesunden Dienst aus. Jetzt startet die Warteschlange mit 16
+  parallelen Anfragen, halbiert sich bei abgewiesenen Kacheln (Minimum 4,
+  `navlogDrosselAnpassen`) und öffnet nach zwölf gelungenen Kacheln wieder
+  um zwei. Schutz bleibt, künstlicher Stau entfällt.
 
 ## Offen
 

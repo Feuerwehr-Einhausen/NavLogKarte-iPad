@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const NAVLOG_WMS_URL = 'https://gdw.navlog.de/data/navlog/wms';
 const STORAGE_KEYS = { kid: 'navlog-ipad-kid', settings: 'navlog-ipad-settings' };
 // Statische App-Version für die PWA. Beim Ausliefern zusammen mit den ?v=-Tags anheben.
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 const APP_BUILD = '2026-08-09';
 const DEFAULT_CONFIG = { configured: false, title: 'NavLog Waldbrandkarte', centerLatitude: 49.696849, centerLongitude: 8.531227, zoom: 14, defaultLayers: [], showOpenStreetMap: false, showFfehLayer: true, showStrassenLayer: false, showSignsLayer: true, showMeasureLayer: true, layerPresets: [] };
 const INITIAL_LAYER_PATTERNS = [
@@ -557,11 +557,29 @@ function toggleNavlogLayer(layer, enabled, updateLegend = true) {
 // reihenweise abgewiesenen Kacheln – sichtbar als graue Hintergrundkarte.
 // Deshalb laufen alle NavLog-Kachelanfragen über eine gemeinsame Warteschlange
 // mit fester Obergrenze; der Rest wartet, statt abgewiesen zu werden.
-const NAVLOG_MAX_PARALLEL = 6;
-const navlogQueue = { aktiv: 0, wartend: [] };
+// Die Drossel passt sich dem Dienst an: Solange er liefert, laufen viele
+// Anfragen parallel (fest deckeln bremst einen gesunden Server unnötig aus).
+// Erst abgewiesene Kacheln senken das Limit, Erfolge heben es wieder an.
+const NAVLOG_MAX_PARALLEL = 16;
+const NAVLOG_MIN_PARALLEL = 4;
+const navlogQueue = { aktiv: 0, wartend: [], limit: NAVLOG_MAX_PARALLEL, erfolge: 0 };
+
+function navlogDrosselAnpassen(erfolg) {
+  if (!erfolg) {
+    navlogQueue.limit = Math.max(NAVLOG_MIN_PARALLEL, Math.floor(navlogQueue.limit / 2));
+    navlogQueue.erfolge = 0;
+    return;
+  }
+  // Nach einer Serie gelungener Kacheln vorsichtig wieder öffnen.
+  if (navlogQueue.limit >= NAVLOG_MAX_PARALLEL) return;
+  if (++navlogQueue.erfolge >= 12) {
+    navlogQueue.limit = Math.min(NAVLOG_MAX_PARALLEL, navlogQueue.limit + 2);
+    navlogQueue.erfolge = 0;
+  }
+}
 
 function navlogQueueNext() {
-  while (navlogQueue.aktiv < NAVLOG_MAX_PARALLEL && navlogQueue.wartend.length) {
+  while (navlogQueue.aktiv < navlogQueue.limit && navlogQueue.wartend.length) {
     const job = navlogQueue.wartend.shift();
     if (job.abgebrochen) continue;
     navlogQueue.aktiv++;
@@ -585,8 +603,8 @@ const NavlogWmsLayer = L.TileLayer.WMS.extend({
     const job = { abgebrochen: false, gestartet: false, beendet: false };
     job.start = () => { tile.src = this.getTileUrl(coords); };
     tile._navlogJob = job;
-    L.DomEvent.on(tile, 'load', () => { navlogQueueDone(job); done(null, tile); });
-    L.DomEvent.on(tile, 'error', event => { navlogQueueDone(job); done(event, tile); });
+    L.DomEvent.on(tile, 'load', () => { navlogDrosselAnpassen(true); navlogQueueDone(job); done(null, tile); });
+    L.DomEvent.on(tile, 'error', event => { navlogDrosselAnpassen(false); navlogQueueDone(job); done(event, tile); });
     navlogQueue.wartend.push(job);
     navlogQueueNext();
     return tile;
